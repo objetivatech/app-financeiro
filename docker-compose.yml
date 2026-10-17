@@ -1,0 +1,49 @@
+# Sobe tudo na VPS:  docker compose up -d --build
+# Requer um arquivo .env (copie de .env.example).
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: financeiro
+      POSTGRES_USER: financeiro
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+    volumes:
+      - dados-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U financeiro -d financeiro"]
+      interval: 5s
+      retries: 10
+
+  migrar:
+    build: { context: ., target: migrador }
+    environment:
+      DATABASE_URL: postgres://financeiro:${POSTGRES_PASSWORD}@db:5432/financeiro
+    depends_on:
+      db: { condition: service_healthy }
+    restart: "no"
+
+  app:
+    build: { context: ., target: app }
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://financeiro:${POSTGRES_PASSWORD}@db:5432/financeiro
+    depends_on:
+      migrar: { condition: service_completed_successfully }
+    # Só escuta na própria VPS: o acesso externo é pelo Cloudflare Tunnel (serviço abaixo).
+    ports:
+      - "127.0.0.1:3000:3000"
+
+  # Expõe o app com HTTPS sem abrir portas no firewall. Ative com: docker compose --profile tunel up -d
+  cloudflared:
+    image: cloudflare/cloudflared:2025.9.1
+    profiles: ["tunel"]
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on: [app]
+
+volumes:
+  dados-postgres:
