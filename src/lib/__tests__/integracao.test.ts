@@ -13,6 +13,7 @@ import { CATEGORIAS_PADRAO } from "../classificacao/categorias";
 import { classificarPendentes, reabrirClassificacaoDaConta } from "../classificacao/executar";
 import type { Db } from "../db";
 import * as schema from "../db/schema";
+import { enfileirar, estadoFila, retomarFila, situacaoDosTrabalhos } from "../importacao/fila";
 import { importarParaBanco } from "../importacao/persistir";
 
 const url = process.env.TEST_DATABASE_URL;
@@ -26,7 +27,7 @@ describe.skipIf(!url)("importação + classificação no banco", () => {
     pool = new Pool({ connectionString: url });
     db = drizzle(pool, { schema });
     await migrate(db, { migrationsFolder: "drizzle" });
-    await db.execute(sql`truncate transacoes, importacoes, regras, contas, titulares, categorias, configuracoes restart identity cascade`);
+    await db.execute(sql`truncate trabalhos_importacao, transacoes, importacoes, regras, contas, titulares, categorias, configuracoes restart identity cascade`);
     await db.insert(schema.categorias).values(CATEGORIAS_PADRAO);
   });
 
@@ -86,5 +87,29 @@ describe.skipIf(!url)("importação + classificação no banco", () => {
     const entrada = (await db.query.transacoes.findFirst({ where: (t, { eq }) => eq(t.id, saida.parTransferenciaId!) }))!;
     expect(saida).toMatchObject({ natureza: "retirada_socio", escopo: "PJ" });
     expect(entrada).toMatchObject({ natureza: "retirada_socio", escopo: "PF", valorCentavos: 500000 });
+  });
+
+  it("fila: processa em segundo plano, registra erros e retoma após reinício", async () => {
+    const esperarFila = async () => {
+      for (let i = 0; i < 100 && estadoFila().ocupada; i++) await new Promise((r) => setTimeout(r, 50));
+    };
+    const ok = await enfileirar(db, fixture("nubank-cartao.csv"), "fatura.csv");
+    const ruim = await enfileirar(db, new TextEncoder().encode("isto não é um extrato"), "lixo.bin");
+    await esperarFila();
+    const [a, b] = (await situacaoDosTrabalhos(db, [ok, ruim])).sort((x, y) => x.id - y.id);
+    expect(a).toMatchObject({ status: "concluido", resultado: expect.objectContaining({ novas: 3 }) });
+    expect(b).toMatchObject({ status: "erro", mensagem: expect.stringMatching(/não reconhecido/) });
+    const linha = await db.query.trabalhosImportacao.findFirst({ where: (t, { eq }) => eq(t.id, ok) });
+    expect(linha?.arquivo).toBeNull();
+
+    // Simula um contêiner reiniciado no meio de um processamento.
+    const [preso] = await db
+      .insert(schema.trabalhosImportacao)
+      .values({ nomeArquivo: "bs2.csv", arquivo: Buffer.from(fixture("bs2-latin1.csv")), status: "processando" })
+      .returning();
+    await retomarFila(db);
+    await esperarFila();
+    const [retomado] = await situacaoDosTrabalhos(db, [preso.id]);
+    expect(retomado.status).toBe("concluido");
   });
 });

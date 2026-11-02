@@ -1,12 +1,12 @@
-import { classificarPendentes } from "@/lib/classificacao/executar";
 import { obterDb } from "@/lib/db";
-import { ErroIa } from "@/lib/ia/cliente";
-import { importarParaBanco } from "@/lib/importacao/persistir";
-import { ErroImportacao } from "@/lib/importacao/tipos";
+import { enfileirar, estadoFila, situacaoDosTrabalhos } from "@/lib/importacao/fila";
 
 const TAMANHO_MAXIMO = 25 * 1024 * 1024;
 
-/** Recebe um arquivo por vez (multipart), importa e classifica. */
+/**
+ * Recebe um arquivo e o coloca na fila; responde na hora com o id do trabalho.
+ * A leitura (que pode usar IA por alguns minutos) acontece em segundo plano.
+ */
 export async function POST(request: Request) {
   const form = await request.formData();
   const arquivo = form.get("arquivo");
@@ -17,18 +17,17 @@ export async function POST(request: Request) {
   if (arquivo.size > TAMANHO_MAXIMO) {
     return Response.json({ erro: "Arquivo maior que 25 MB." }, { status: 413 });
   }
+  const id = await enfileirar(obterDb(), new Uint8Array(await arquivo.arrayBuffer()), arquivo.name, contaId);
+  return Response.json({ id }, { status: 202 });
+}
 
-  const db = obterDb();
-  try {
-    const bytes = new Uint8Array(await arquivo.arrayBuffer());
-    const resultado = await importarParaBanco(db, bytes, arquivo.name, { contaId });
-    const classificacao = await classificarPendentes(db);
-    return Response.json({ ...resultado, classificacao });
-  } catch (erro) {
-    if (erro instanceof ErroImportacao || erro instanceof ErroIa) {
-      return Response.json({ erro: erro.message }, { status: 422 });
-    }
-    console.error("Falha ao importar", arquivo.name, erro);
-    return Response.json({ erro: "Erro inesperado ao importar. Veja os logs do servidor." }, { status: 500 });
-  }
+/** Situação dos trabalhos: GET /api/importar?ids=1,2,3 */
+export async function GET(request: Request) {
+  const ids = (new URL(request.url).searchParams.get("ids") ?? "")
+    .split(",")
+    .map(Number)
+    .filter((n) => Number.isInteger(n) && n > 0)
+    .slice(0, 200);
+  const trabalhos = await situacaoDosTrabalhos(obterDb(), ids);
+  return Response.json({ trabalhos, ...estadoFila() });
 }

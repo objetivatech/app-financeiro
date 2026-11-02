@@ -5,6 +5,7 @@ import { obterDb } from "@/lib/db";
 import { iaDisponivel } from "@/lib/ia/cliente";
 import { listarContas } from "@/lib/consultas";
 import { formatarData } from "@/lib/formato";
+import { trabalhosRecentes } from "@/lib/importacao/fila";
 import { Importador } from "./importador";
 
 export default function PaginaImportar() {
@@ -27,9 +28,10 @@ export default function PaginaImportar() {
 async function Conteudo() {
   await connection();
   const db = obterDb();
-  const [contas, historico] = await Promise.all([
+  const [contas, historico, idsAbertos] = await Promise.all([
     listarContas(db),
-    db.query.importacoes.findMany({ orderBy: (i, { desc }) => [desc(i.id)], limit: 15}),
+    db.query.importacoes.findMany({ orderBy: (i, { desc }) => [desc(i.id)], limit: 15 }),
+    trabalhosRecentes(db),
   ]);
   const apelidos = new Map(contas.map((c) => [c.id, c.apelido]));
   return (
@@ -40,7 +42,7 @@ async function Conteudo() {
           imagens precisam da IA, e a classificação fica só com regras e heurísticas.
         </p>
       )}
-      <Importador contas={contas.map((c) => ({ id: c.id, apelido: c.apelido }))} />
+      <Importador contas={contas.map((c) => ({ id: c.id, apelido: c.apelido }))} idsIniciais={idsAbertos} />
       {historico.length > 0 && (
         <Cartao titulo="Últimas importações">
           <table className="w-full text-sm">

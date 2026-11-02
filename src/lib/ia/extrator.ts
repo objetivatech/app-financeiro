@@ -82,7 +82,8 @@ export async function extrairComIa(entrada: EntradaExtracao): Promise<ExtratoNor
     max_tokens: 64000,
     betas: [BETA_FALLBACK],
     fallbacks: "default",
-    output_config: { effort: "medium", format: betaZodOutputFormat(EsquemaExtrato) },
+    // Transcrever um extrato não exige raciocínio longo: esforço baixo deixa a leitura bem mais rápida.
+    output_config: { effort: "low", format: betaZodOutputFormat(EsquemaExtrato) },
     system: SISTEMA,
     messages: [
       {

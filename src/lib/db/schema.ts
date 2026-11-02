@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   bigint,
   boolean,
+  customType,
   date,
   index,
   integer,
@@ -15,6 +16,9 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { NATUREZAS, type Natureza } from "../naturezas";
+
+/** Conteúdo binário (arquivo enviado), guardado só até o processamento terminar. */
+const bytea = customType<{ data: Buffer }>({ dataType: () => "bytea" });
 
 export const escopoEnum = pgEnum("escopo", ["PF", "PJ"]);
 /** Escopo padrão de uma conta: "misto" quando a mesma conta é usada para PF e PJ. */
@@ -158,3 +162,27 @@ export const analises = pgTable("analises", {
   conteudo: text("conteudo").notNull(),
   criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const statusTrabalhoEnum = pgEnum("status_trabalho", ["fila", "processando", "concluido", "erro"]);
+
+/**
+ * Fila de importação: o upload só grava o arquivo aqui e responde na hora; um processo em
+ * segundo plano (importacao/fila.ts) lê e classifica. Assim a leitura por IA, que pode levar
+ * minutos, não depende da conexão do navegador ficar aberta.
+ */
+export const trabalhosImportacao = pgTable("trabalhos_importacao", {
+  id: serial("id").primaryKey(),
+  nomeArquivo: text("nome_arquivo").notNull(),
+  /** Conta escolhida pelo usuário no upload (null = detectar). */
+  contaId: integer("conta_id").references(() => contas.id, { onDelete: "set null" }),
+  /** Apagado ao concluir, para não guardar o extrato duas vezes. */
+  arquivo: bytea("arquivo"),
+  status: statusTrabalhoEnum("status").notNull().default("fila"),
+  mensagem: text("mensagem"),
+  resultado: jsonb("resultado"),
+  criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  iniciadoEm: timestamp("iniciado_em", { withTimezone: true }),
+  concluidoEm: timestamp("concluido_em", { withTimezone: true }),
+});
+
+export type TrabalhoImportacao = typeof trabalhosImportacao.$inferSelect;
