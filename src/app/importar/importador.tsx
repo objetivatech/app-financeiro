@@ -78,6 +78,8 @@ export function Importador({
   async function enviarTudo() {
     setEnviando(true);
     for (const item of itensRef.current.filter((i) => i.envio === "pendente" && i.arquivo)) {
+      // Saiu da lista (fila cancelada durante o envio)? Não envia.
+      if (!itensRef.current.some((i) => i.chave === item.chave && i.envio === "pendente")) continue;
       atualizar(item.chave, { envio: "enviando" });
       const form = new FormData();
       form.append("arquivo", item.arquivo!);
@@ -116,6 +118,17 @@ export function Importador({
       // Rede instável: tenta de novo no próximo ciclo.
     }
   }, []);
+
+  const [cancelando, setCancelando] = useState(false);
+  async function cancelar() {
+    if (!window.confirm("Cancelar a importação? O que ainda não foi lido será descartado; o que já foi importado continua.")) return;
+    setCancelando(true);
+    // Arquivos que nem chegaram a ser enviados também saem da lista.
+    setItens((atuais) => atuais.filter((i) => i.envio !== "pendente"));
+    await fetch("/api/importar", { method: "DELETE" }).catch(() => null);
+    await consultar();
+    setCancelando(false);
+  }
 
   const precisaConsultar = ocupada || itens.some((i) => i.id && !terminado(i));
   useEffect(() => {
@@ -188,6 +201,11 @@ export function Importador({
         <Botao onClick={enviarTudo} disabled={enviando || pendentes === 0}>
           {enviando ? "Enviando…" : `Importar ${pendentes || ""} arquivo(s)`}
         </Botao>
+        {(emAndamento || ocupada) && (
+          <button onClick={cancelar} disabled={cancelando} className="text-sm text-negativo underline disabled:opacity-50">
+            {cancelando ? "Cancelando…" : "Cancelar fila"}
+          </button>
+        )}
         {algumConcluido && !emAndamento && !ocupada && (
           <Link href="/transacoes?revisar=1" className="text-sm underline">
             Revisar transações
@@ -216,6 +234,8 @@ function LinhaItem({ item }: { item: Item }) {
     rotulo = "importado";
     cor = "text-positivo";
     detalhe = resumoConcluido(s);
+  } else if (s.mensagem === "Cancelado por você.") {
+    rotulo = "cancelado";
   } else {
     rotulo = "erro";
     cor = "text-negativo";

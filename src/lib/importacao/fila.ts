@@ -12,7 +12,16 @@ import { ErroImportacao } from "./tipos";
  * pode usar a IA por alguns minutos, e no fim a classificação roda uma vez para o lote todo.
  */
 
-const estado = globalThis as unknown as { __filaImportacao?: { ativa: boolean; classificando: boolean } };
+const estado = globalThis as unknown as {
+  __filaImportacao?: {
+    ativa: boolean;
+    classificando: boolean;
+    /** Leitura ou classificação em andamento, para poder interromper. */
+    atual?: AbortController;
+    /** O usuário cancelou neste lote: a classificação final roda sem IA. */
+    cancelada?: boolean;
+  };
+};
 estado.__filaImportacao ??= { ativa: false, classificando: false };
 const fila = estado.__filaImportacao;
 
@@ -40,6 +49,24 @@ export function dispararFila(db: Db): void {
       fila.ativa = false;
       fila.classificando = false;
     });
+}
+
+const MENSAGEM_CANCELADO = "Cancelado por você.";
+
+/**
+ * Cancela o que ainda está na fila e interrompe a leitura em andamento.
+ * O que já foi importado continua importado (dá para excluir pela tela de Contas).
+ */
+export async function cancelarFila(db: Db): Promise<number> {
+  const cancelados = await db
+    .update(trabalhosImportacao)
+    .set({ status: "erro", mensagem: MENSAGEM_CANCELADO, arquivo: null, concluidoEm: new Date() })
+    .where(eq(trabalhosImportacao.status, "fila"))
+    .returning({ id: trabalhosImportacao.id });
+  const emAndamento = fila.atual;
+  if (fila.ativa) fila.cancelada = true;
+  emAndamento?.abort();
+  return cancelados.length + (emAndamento ? 1 : 0);
 }
 
 /** Na subida do servidor: o que estava "processando" foi interrompido; volta para a fila. */
@@ -74,13 +101,20 @@ async function processar(db: Db): Promise<void> {
 
     // Classifica o lote inteiro de uma vez (inclui transferências entre arquivos diferentes).
     fila.classificando = true;
+    const controle = new AbortController();
+    fila.atual = controle;
     try {
-      const resumo = await classificarPendentes(db);
+      // Após um cancelamento, classifica só com regras (rápido); a IA fica para depois, pelo botão
+      // "Classificar com IA" em Transações. Cancelar durante esta etapa também a interrompe.
+      const usarIa = !fila.cancelada;
+      fila.cancelada = false;
+      const resumo = await classificarPendentes(db, { usarIa, signal: controle.signal });
       if (resumo.erroIa) console.error("Classificação por IA falhou:", resumo.erroIa);
     } catch (erro) {
       console.error("Falha ao classificar após importação", erro);
     } finally {
       fila.classificando = false;
+      fila.atual = undefined;
     }
     // Volta ao início: pode ter chegado arquivo novo enquanto classificava.
   }
@@ -88,17 +122,22 @@ async function processar(db: Db): Promise<void> {
 
 async function processarUm(db: Db, trabalho: TrabalhoImportacao): Promise<void> {
   const inicio = Date.now();
+  const controle = new AbortController();
+  fila.atual = controle;
   try {
     if (!trabalho.arquivo) throw new ErroImportacao("Arquivo não encontrado na fila.");
     const resultado: ResultadoImportacao = await importarParaBanco(db, new Uint8Array(trabalho.arquivo), trabalho.nomeArquivo, {
       contaId: trabalho.contaId ?? undefined,
+      signal: controle.signal,
     });
     await db
       .update(trabalhosImportacao)
       .set({ status: "concluido", resultado, arquivo: null, concluidoEm: new Date(), mensagem: null })
       .where(eq(trabalhosImportacao.id, trabalho.id));
     console.log(`Importado ${trabalho.nomeArquivo}: ${resultado.novas} novas em ${Math.round((Date.now() - inicio) / 1000)}s`);
-  } catch (erro) {
+  } catch (erroOriginal) {
+    // Cancelamento pelo usuário: a chamada à IA aborta com um erro genérico; mostramos a mensagem certa.
+    const erro = controle.signal.aborted ? new ErroImportacao(MENSAGEM_CANCELADO) : erroOriginal;
     const conhecido = erro instanceof ErroImportacao || erro instanceof ErroIa;
     if (!conhecido) console.error(`Falha ao importar ${trabalho.nomeArquivo}`, erro);
     await db
@@ -113,6 +152,8 @@ async function processarUm(db: Db, trabalho: TrabalhoImportacao): Promise<void> 
           : `Erro inesperado: ${erro instanceof Error ? erro.message : String(erro)}`.slice(0, 500),
       })
       .where(eq(trabalhosImportacao.id, trabalho.id));
+  } finally {
+    fila.atual = undefined;
   }
 }
 

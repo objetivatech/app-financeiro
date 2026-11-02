@@ -57,6 +57,8 @@ export interface EntradaExtracao {
   nomeArquivo: string;
   /** Para CSV: o texto já decodificado. */
   texto?: string;
+  /** Permite interromper a leitura no meio (botão "Cancelar fila"). */
+  signal?: AbortSignal;
 }
 
 function blocoDocumento(entrada: EntradaExtracao): Anthropic.Beta.BetaContentBlockParam {
@@ -94,7 +96,7 @@ export async function extrairComIa(entrada: EntradaExtracao): Promise<ExtratoNor
         ],
       },
     ],
-  });
+  }, { signal: entrada.signal });
   const resposta = await stream.finalMessage();
 
   if (resposta.stop_reason === "refusal") {

@@ -9,6 +9,8 @@ import { ErroImportacao, type ExtratoNormalizado } from "./tipos";
 export interface OpcoesImportacao {
   /** Permite injetar outro extrator (útil em testes). */
   extratorIa?: typeof extrairComIa;
+  /** Interrompe a leitura por IA (cancelamento da fila). */
+  signal?: AbortSignal;
 }
 
 /**
@@ -38,12 +40,12 @@ export async function lerArquivo(
       const { extrato } = parseCsv(texto, nomeArquivo);
       if (extrato && extrato.transacoes.length > 0) return extrato;
       exigirIa("Não reconheci as colunas deste CSV.");
-      return extrator({ formato: "csv", bytes, mimeType, nomeArquivo, texto });
+      return extrator({ formato: "csv", bytes, mimeType, nomeArquivo, texto, signal: opcoes.signal });
     }
     case "pdf":
     case "imagem":
       exigirIa(`Arquivos ${formato === "pdf" ? "PDF" : "de imagem"} são lidos pela IA.`);
-      return extrator({ formato, bytes, mimeType, nomeArquivo });
+      return extrator({ formato, bytes, mimeType, nomeArquivo, signal: opcoes.signal });
     default:
       throw new ErroImportacao("Formato de arquivo não reconhecido.");
   }

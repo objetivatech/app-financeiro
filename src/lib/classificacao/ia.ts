@@ -48,7 +48,11 @@ ${CATEGORIAS_PADRAO.map((c) => `${c.id}: ${c.nome} [${c.escopo ?? "ambos"}]`).jo
 }
 
 /** Classifica transações em lotes. Nunca envia CPF/CNPJ: só data, descrição, valor e o tipo da conta. */
-export async function classificarComIa(itens: ItemParaIa[], perfil: string): Promise<ClassificacaoIa[]> {
+export async function classificarComIa(
+  itens: ItemParaIa[],
+  perfil: string,
+  signal?: AbortSignal,
+): Promise<ClassificacaoIa[]> {
   const cliente = obterClienteIa();
   const resultado: ClassificacaoIa[] = [];
 
@@ -77,7 +81,7 @@ export async function classificarComIa(itens: ItemParaIa[], perfil: string): Pro
           content: `Classifique as ${lote.length} transações (valor negativo = saída):\n${linhas.join("\n")}`,
         },
       ],
-    });
+    }, { signal });
     if (resposta.stop_reason === "refusal") throw new ErroIa("A IA recusou classificar este lote.");
     if (!resposta.parsed_output) throw new ErroIa("A IA não devolveu a classificação no formato esperado.");
 

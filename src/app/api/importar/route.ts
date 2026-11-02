@@ -1,5 +1,5 @@
 import { obterDb } from "@/lib/db";
-import { enfileirar, estadoFila, situacaoDosTrabalhos } from "@/lib/importacao/fila";
+import { cancelarFila, enfileirar, estadoFila, situacaoDosTrabalhos } from "@/lib/importacao/fila";
 
 const TAMANHO_MAXIMO = 25 * 1024 * 1024;
 
@@ -30,4 +30,10 @@ export async function GET(request: Request) {
     .slice(0, 200);
   const trabalhos = await situacaoDosTrabalhos(obterDb(), ids);
   return Response.json({ trabalhos, ...estadoFila() });
+}
+
+/** Cancela a fila: o que não foi lido é descartado e a leitura em andamento é interrompida. */
+export async function DELETE() {
+  const cancelados = await cancelarFila(obterDb());
+  return Response.json({ cancelados });
 }

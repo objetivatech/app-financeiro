@@ -65,7 +65,10 @@ export interface ResumoClassificacao {
  * Classifica as transações ainda sem categoria: regras do usuário, heurísticas,
  * pareamento de transferências entre contas próprias e, por último, IA.
  */
-export async function classificarPendentes(db: Db, opcoes: { usarIa?: boolean } = {}): Promise<ResumoClassificacao> {
+export async function classificarPendentes(
+  db: Db,
+  opcoes: { usarIa?: boolean; signal?: AbortSignal } = {},
+): Promise<ResumoClassificacao> {
   const pendentesDb = await db.query.transacoes.findMany({
     where: or(isNull(transacoes.classificadoPor), isNull(transacoes.categoriaId)),
   });
@@ -134,6 +137,7 @@ export async function classificarPendentes(db: Db, opcoes: { usarIa?: boolean } 
           };
         }),
         perfil,
+        opcoes.signal,
       );
       for (const c of resultado) {
         const t = porId.get(c.id);

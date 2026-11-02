@@ -4,6 +4,7 @@
  *   TEST_DATABASE_URL=postgres://postgres@localhost:5433/financeiro_teste pnpm test
  */
 import { readFileSync } from "node:fs";
+import { createServer } from "node:http";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
@@ -13,7 +14,7 @@ import { CATEGORIAS_PADRAO } from "../classificacao/categorias";
 import { classificarPendentes, reabrirClassificacaoDaConta } from "../classificacao/executar";
 import type { Db } from "../db";
 import * as schema from "../db/schema";
-import { enfileirar, estadoFila, retomarFila, situacaoDosTrabalhos } from "../importacao/fila";
+import { cancelarFila, enfileirar, estadoFila, retomarFila, situacaoDosTrabalhos } from "../importacao/fila";
 import { importarParaBanco } from "../importacao/persistir";
 
 const url = process.env.TEST_DATABASE_URL;
@@ -111,5 +112,32 @@ describe.skipIf(!url)("importação + classificação no banco", () => {
     await esperarFila();
     const [retomado] = await situacaoDosTrabalhos(db, [preso.id]);
     expect(retomado.status).toBe("concluido");
+  });
+
+  it("fila: cancelar interrompe a leitura por IA em andamento e descarta o resto", async () => {
+    // API "da Anthropic" falsa que nunca responde: simula um PDF demorando para ser lido.
+    const servidor = createServer(() => {});
+    await new Promise<void>((r) => servidor.listen(0, "127.0.0.1", r));
+    const porta = (servidor.address() as { port: number }).port;
+    process.env.ANTHROPIC_API_KEY = "teste";
+    process.env.ANTHROPIC_BASE_URL = `http://127.0.0.1:${porta}`;
+    try {
+      const lento = await enfileirar(db, new TextEncoder().encode("%PDF-1.4 extrato longo"), "lento.pdf");
+      const esperando = await enfileirar(db, fixture("extrato-btg.ofx"), "depois.ofx");
+      for (let i = 0; i < 100; i++) {
+        const [s] = await situacaoDosTrabalhos(db, [lento]);
+        if (s.status === "processando") break;
+        await new Promise((r) => setTimeout(r, 20));
+      }
+      expect(await cancelarFila(db)).toBe(2);
+      for (let i = 0; i < 100 && estadoFila().ocupada; i++) await new Promise((r) => setTimeout(r, 50));
+      const situacoes = await situacaoDosTrabalhos(db, [lento, esperando]);
+      for (const s of situacoes) expect(s).toMatchObject({ status: "erro", mensagem: "Cancelado por você." });
+    } finally {
+      delete process.env.ANTHROPIC_API_KEY;
+      delete process.env.ANTHROPIC_BASE_URL;
+      servidor.closeAllConnections();
+      servidor.close();
+    }
   });
 });
