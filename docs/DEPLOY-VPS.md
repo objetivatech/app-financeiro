@@ -13,8 +13,22 @@ sudo usermod -aG docker $USER   # saia e entre de novo na sessão SSH
 git clone https://github.com/objetivatech/app-financeiro.git
 cd app-financeiro
 cp .env.example .env
-nano .env    # preencha POSTGRES_PASSWORD, ANTHROPIC_API_KEY, APP_USUARIO/APP_SENHA
+nano .env    # preencha conforme a tabela abaixo
 ```
+
+### De onde vem cada valor do `.env`
+
+Nenhum desses dados existe pronto em algum lugar: você cria cada um. O arquivo `.env` fica **só na VPS**
+(nunca vai para o GitHub).
+
+| Variável | O que é | Como obter |
+|---|---|---|
+| `POSTGRES_PASSWORD` | Senha do banco de dados. Só o app usa; você não vai digitá-la no dia a dia. | Invente, ou gere na VPS com `openssl rand -base64 24` e cole o resultado. |
+| `ANTHROPIC_API_KEY` | Chave para o app usar a IA (Claude). | Crie uma conta em [console.anthropic.com](https://console.anthropic.com), adicione créditos em *Billing* e gere a chave em *Settings → API Keys* (começa com `sk-ant-`). É uma cobrança separada da assinatura do Claude.ai. Defina um limite mensal de gasto em *Limits*. |
+| `APP_USUARIO` / `APP_SENHA` | Login e senha que o navegador vai pedir ao abrir o app. | Você escolhe. Use uma senha forte e diferente das outras. |
+| `CLOUDFLARE_TUNNEL_TOKEN` | Liga a VPS à Cloudflare sem abrir portas. | Gerado no passo 3, ao criar o túnel. Pode deixar vazio por enquanto. |
+
+Sem a `ANTHROPIC_API_KEY` o app funciona com OFX e CSV, mas não lê PDF/fotos nem gera dicas.
 
 ## 2. Subir o app
 
