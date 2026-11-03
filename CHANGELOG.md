@@ -3,6 +3,19 @@
 Todas as mudanças relevantes do app, da mais recente para a mais antiga. O formato segue
 [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e as versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.5.0] — 2026-11-03
+
+### Adicionado
+- **A pagar e dívidas** (`/pagar`): parcelas de dívidas, contas fixas mensais e contas avulsas, com baixa manual ou
+  **automática pelo extrato** (mesmo valor até 7 dias do vencimento).
+- **Dívidas:** parcelas iguais ou com valores diferentes, parcelas já pagas, juros ao mês/ano calculados a partir do
+  valor recebido, progresso, data de término e **ordem de quitação** (primeiro o que não pode atrasar, depois o maior juro).
+- **Alerta de atraso** para dívidas com tolerância (ex.: acordo judicial cancelado após 30 dias) e **lembrete depois
+  de pagar** (ex.: enviar comprovante), também no Painel.
+- **Contas fixas** (pró-labore, DAS, contabilidade…): previsão automática deste mês e dos três próximos.
+- **Fluxo de caixa projetado** (`/fluxo`): 13 semanas, PJ e PF, a partir do último saldo conhecido de cada conta.
+- Categorias "Parcelas de dívidas" (PF e PJ).
+
 ## [0.4.0] — 2026-11-03
 
 ### Alterado

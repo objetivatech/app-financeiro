@@ -1,5 +1,6 @@
 import { desc, eq, sql } from "drizzle-orm";
 import { classificarPendentes } from "../../classificacao/executar";
+import { atualizarCompromissos } from "../../compromissos/servico";
 import type { Db } from "../../db";
 import { clientes, compromissos, contas, integracoes, notasFiscais, transacoes } from "../../db/schema";
 import { hojeBrasil, primeiroDoMes, somarDias } from "../../datas";
@@ -214,6 +215,7 @@ export async function sincronizarAsaas(db: Db, opcoes: { signal?: AbortSignal; c
       })
       .where(eq(integracoes.id, ID));
 
+    await atualizarCompromissos(db).catch((erro) => console.error("Falha ao conciliar contas a pagar", erro));
     if (opcoes.classificar !== false && resumo.lancamentosNovos > 0) {
       await classificarPendentes(db, { signal }).catch((erro) => console.error("Classificação após Asaas falhou", erro));
     }

@@ -12,6 +12,7 @@ import { EsquemaAnalise } from "@/lib/ia/analise";
 import { iaDisponivel } from "@/lib/ia/cliente";
 import { LinkAjuda } from "@/components/link-ajuda";
 import { indicadoresFiscais, resumoRecebiveis } from "@/lib/fiscal/indicadores";
+import { atualizarCompromissos, contasAPagar, lembretesPendentes, resumoDividas } from "@/lib/compromissos/servico";
 import { BotaoAnalise } from "./botao-analise";
 
 type Busca = Promise<Record<string, string | string[] | undefined>>;
@@ -47,7 +48,8 @@ async function Conteudo({ searchParams }: { searchParams: Busca }) {
   }
 
   const periodo = periodoDoMes(mes);
-  const [resumo, categorias, serie, ultimaAnalise, recebiveis, fiscal] = await Promise.all([
+  await atualizarCompromissos(db);
+  const [resumo, categorias, serie, ultimaAnalise, recebiveis, fiscal, aPagar, dividasAtivas, lembretes] = await Promise.all([
     resumoDoPeriodo(db, periodo),
     despesasPorCategoria(db, periodo),
     serieMensal(db, 6, mes),
@@ -57,7 +59,12 @@ async function Conteudo({ searchParams }: { searchParams: Busca }) {
     }),
     resumoRecebiveis(db),
     indicadoresFiscais(db),
+    contasAPagar(db, 7),
+    resumoDividas(db),
+    lembretesPendentes(db),
   ]);
+  const dividasEmRisco = dividasAtivas.filter((d) => d.diasAtraso > 0 && d.diasTolerancia);
+  const pagarSemana = aPagar.pendentes;
   const temRecebiveis = recebiveis.aReceber30dQtd + recebiveis.vencidoQtd > 0 || recebiveis.recebidoMesCentavos > 0;
   const temFiscal = fiscal.mesesComDados > 0 && fiscal.perfil.proLaboreMensalCentavos > 0;
   const resultadoPj = resumo.pjReceitas - resumo.pjDespesas;
@@ -79,6 +86,23 @@ async function Conteudo({ searchParams }: { searchParams: Busca }) {
         </div>
       </div>
 
+      {dividasEmRisco.map((d) => (
+        <Link key={d.id} href="/pagar" className="block rounded-md border border-negativo/50 bg-negativo/10 p-3 text-sm">
+          <strong>⚠ {d.nome}: parcela atrasada há {d.diasAtraso} dia(s)</strong> — limite de {d.diasTolerancia} dias. {d.consequenciaAtraso}
+        </Link>
+      ))}
+      {lembretes.length > 0 && (
+        <Link href="/pagar" className="block rounded-md border border-alerta/40 bg-alerta/10 p-3 text-sm">
+          📎 {lembretes.length} lembrete(s) depois de pagar (ex.: enviar comprovante). Ver em A pagar.
+        </Link>
+      )}
+      {pagarSemana.length > 0 && (
+        <Link href="/pagar" className="block rounded-md border border-borda bg-superficie p-3 text-sm hover:border-foreground/30">
+          A pagar nos próximos 7 dias:{" "}
+          <strong>{pagarSemana.length} conta(s)</strong>, <Valor centavos={pagarSemana.reduce((t, p) => t + p.valorCentavos, 0)} />
+          {pagarSemana.some((p) => p.status === "vencido") && <span className="text-negativo"> · há contas vencidas</span>}
+        </Link>
+      )}
       {(resumo.paraRevisar > 0 || resumo.semEscopo > 0) && (
         <p className="rounded-md border border-alerta/40 bg-alerta/10 p-3 text-sm">
           ⚠ {resumo.paraRevisar > 0 && <>{resumo.paraRevisar} transação(ões) para revisar. </>}

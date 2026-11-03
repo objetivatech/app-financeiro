@@ -3,7 +3,7 @@
 Este manual explica cada tela do app e como os números são calculados. Ele é o mesmo texto que aparece em
 **Ajuda** dentro do app (o ícone **?** ao lado do título de cada tela leva direto para a seção certa).
 
-**Sumário:** [Conceitos](#conceitos) · [Painel](#painel) · [Transações](#transacoes) · [A receber](#receber) ·
+**Sumário:** [Conceitos](#conceitos) · [Painel](#painel) · [Transações](#transacoes) · [A receber](#receber) · [A pagar e dívidas](#pagar) · [Fluxo de caixa](#fluxo) ·
 [Impostos e Fator R](#impostos) · [Importar](#importar) · [Contas](#contas) · [Integrações](#integracoes) ·
 [Configurações](#configuracoes) · [Custo da IA](#custos-ia) · [Rotina sugerida](#rotina) · [Novidades](#novidades)
 
@@ -92,6 +92,67 @@ Contas a receber da empresa, vindas das cobranças do **Asaas** (veja [Integraç
 
 Quando o recebimento aparece no extrato do Asaas, o app **concilia** automaticamente: liga a cobrança à entrada
 no extrato.
+
+<a id="pagar"></a>
+
+## A pagar e dívidas
+
+Reúne tudo o que vai sair: **parcelas de dívidas**, **contas fixas** (todo mês) e **contas avulsas** (uma vez).
+
+- **Alertas no topo:** dívida com regra de atraso (ex.: acordo judicial que é cancelado depois de 30 dias) aparece em
+  vermelho assim que uma parcela atrasa, com quantos dias faltam para o limite. Lembretes depois de pagar (ex.:
+  "enviar comprovante ao escritório") ficam em amarelo até você clicar em **feito**.
+- **Próximos 30 dias:** o que vence (e o que já venceu). **pago** dá baixa manual com a data escolhida; as pagas nos
+  últimos 15 dias podem ser **desfeitas**.
+- **Baixa automática (conciliação):** quando aparece no extrato uma saída do **mesmo valor** até **7 dias** do
+  vencimento (na conta escolhida, se você informou uma), o app marca como paga e classifica a transação com a
+  categoria da conta. Para contas fixas de valor variável (luz, água), informe o **texto no extrato**: com ele, o app
+  aceita até 5% de diferença.
+
+### Cadastrar uma dívida
+
+Em **Cadastrar → Nova dívida**:
+
+- **Parcelas iguais:** valor, quantidade e 1º vencimento (as datas seguem no mesmo dia dos meses seguintes; em meses
+  curtos, o último dia). **Já pagas** marca as primeiras como quitadas.
+- **Valores diferentes** (ex.: SParcelado da Shopee): uma linha por parcela com data e valor, como
+  `20/11/2026 639,88`.
+- **Valor que você recebeu:** com ele o app calcula os **juros ao mês e ao ano** e a ordem de quitação.
+- **Atraso máximo tolerado** e **o que acontece se passar:** ativam o alerta vermelho.
+- **Lembrete depois de pagar:** aparece a cada parcela paga, até você marcar como feito.
+- Uma dívida com dois recebedores (ex.: parcelas ao credor e honorários aos advogados) pode ser cadastrada como **duas
+  dívidas**, cada uma com seu valor e prazo.
+
+<a id="dividas"></a>
+
+### Cartões de dívida e ordem de quitação
+
+Cada dívida mostra o que falta pagar, parcelas pagas, a próxima parcela, quando termina e os juros. Embaixo, a **ordem
+de quitação**: primeiro as dívidas que **não podem atrasar** (pagar em dia), depois as de **maior juro** — se sobrar
+dinheiro, antecipe essas primeiro (método "avalanche": é o que mais economiza).
+
+### Contas fixas
+
+Pró-labore, DAS, INSS do pró-labore, contabilidade, aluguel, escola… Cadastre uma vez com valor aproximado e dia do mês;
+o app cria a previsão deste mês e dos próximos três. Pode ser **a pagar** ou **a receber** (ex.: o pró-labore entra
+na PF como receita e sai da PJ como despesa — cadastre os dois para o fluxo de caixa ficar completo). **Encerrar**
+remove os meses futuros e mantém o histórico.
+
+<a id="fluxo"></a>
+
+## Fluxo de caixa
+
+Projeção das próximas **13 semanas**, separada em PJ e PF:
+
+- **Saldo inicial:** o último saldo conhecido de cada conta (fim do último extrato importado que informa saldo, ou o
+  saldo do Asaas pela integração). Contas mistas contam como PF. Contas sem saldo conhecido ficam de fora e são
+  avisadas.
+- **Entra:** cobranças em aberto (Asaas) e contas a receber. **Sai:** parcelas, contas fixas e avulsas a pagar.
+  Atrasados entram na primeira semana.
+- O quadro mostra o **menor saldo previsto** e em que semana ele acontece; saldo negativo fica em vermelho.
+
+Gastos do dia a dia que não estão cadastrados (mercado, compras no cartão) não entram: use o saldo projetado como
+teto, não como garantia.
 
 <a id="impostos"></a>
 
