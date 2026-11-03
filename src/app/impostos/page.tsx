@@ -1,0 +1,138 @@
+import Link from "next/link";
+import { connection } from "next/server";
+import { Suspense } from "react";
+import { BarrasMensais } from "@/components/barras-mensais";
+import { LinkAjuda } from "@/components/link-ajuda";
+import { Cartao, Carregando, Valor } from "@/components/ui";
+import { obterDb } from "@/lib/db";
+import { indicadoresFiscais } from "@/lib/fiscal/indicadores";
+import { INSS_PRO_LABORE, LIMITE_FATOR_R } from "@/lib/fiscal/simples";
+import { formatarMoeda } from "@/lib/formato";
+
+export default function PaginaImpostos() {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-xl font-semibold">
+          Impostos e Fator R <LinkAjuda secao="impostos" />
+        </h1>
+        <p className="mt-1 text-sm text-suave">
+          Estimativa do Simples Nacional a partir das notas emitidas. O valor oficial do DAS é o que a contabilidade
+          calcula no PGDAS-D; use esta tela para planejar.
+        </p>
+      </div>
+      <Suspense fallback={<Carregando />}>
+        <Conteudo />
+      </Suspense>
+    </div>
+  );
+}
+
+const pct = (v: number, casas = 1) => `${(v * 100).toLocaleString("pt-BR", { maximumFractionDigits: casas, minimumFractionDigits: casas })}%`;
+
+async function Conteudo() {
+  await connection();
+  const ind = await indicadoresFiscais(obterDb());
+  const d = ind.diagnostico;
+  const { perfil } = ind;
+
+  if (ind.mesesComDados === 0 && ind.receitaMesAtualCentavos === 0) {
+    return (
+      <Cartao>
+        <p className="text-sm text-suave">
+          Ainda não há receita registrada. <Link href="/integracoes" className="underline">Conecte o Asaas</Link> para
+          trazer as notas fiscais dos últimos 12 meses.
+        </p>
+      </Cartao>
+    );
+  }
+
+  const folga = d.receitaMensalMaximaCentavos - Math.round(d.rbt12Centavos / 12);
+  const economiaMensal = d.dasNoOutroAnexoCentavos - d.dasEstimadoCentavos;
+
+  return (
+    <>
+      {perfil.proLaboreMensalCentavos === 0 && (
+        <p className="rounded-md border border-alerta/40 bg-alerta/10 p-3 text-sm">
+          Cadastre seu pró-labore em <Link href="/configuracoes" className="underline">Configurações</Link> para calcular o
+          Fator R.
+        </p>
+      )}
+      {ind.mesesComDados < 12 && (
+        <p className="rounded-md border border-borda bg-superficie p-3 text-sm text-suave">
+          Só há receita registrada em {ind.mesesComDados} dos últimos 12 meses. Enquanto o histórico não estiver completo, a
+          RBT12 e o Fator R ficam distorcidos.
+        </p>
+      )}
+
+      <div className="grid gap-3 md:grid-cols-3">
+        <Cartao titulo="Fator R (últimos 12 meses)">
+          <div className={`text-2xl font-semibold ${d.fatorR >= LIMITE_FATOR_R ? "text-positivo" : "text-negativo"}`}>{pct(d.fatorR)}</div>
+          <div className="mt-1 text-xs text-suave">
+            {d.fatorR >= LIMITE_FATOR_R ? "acima de 28%: tributa pelo Anexo III" : "abaixo de 28%: tributa pelo Anexo V (mais caro)"}
+          </div>
+          <dl className="mt-3 grid grid-cols-2 gap-1 text-sm">
+            <dt className="text-suave">Folha (pró-labore × 12)</dt>
+            <dd className="text-right"><Valor centavos={d.folha12Centavos} /></dd>
+            <dt className="text-suave">Receita 12 meses (RBT12)</dt>
+            <dd className="text-right"><Valor centavos={d.rbt12Centavos} /></dd>
+          </dl>
+        </Cartao>
+        <Cartao titulo={`DAS estimado de ${new Date().toLocaleString("pt-BR", { month: "long" })}`}>
+          <div className="text-2xl font-semibold"><Valor centavos={d.dasEstimadoCentavos} /></div>
+          <div className="mt-1 text-xs text-suave">
+            Anexo {d.anexo}, alíquota efetiva {pct(d.aliquotaEfetiva, 2)} sobre <Valor centavos={ind.receitaMesAtualCentavos} /> faturados
+            até agora
+          </div>
+          <dl className="mt-3 grid grid-cols-2 gap-1 text-sm">
+            <dt className="text-suave">INSS do pró-labore (11%)</dt>
+            <dd className="text-right"><Valor centavos={Math.round(perfil.proLaboreMensalCentavos * INSS_PRO_LABORE)} /></dd>
+            <dt className="text-suave">No Anexo {d.anexo === "III" ? "V" : "III"} seria</dt>
+            <dd className="text-right"><Valor centavos={d.dasNoOutroAnexoCentavos} /></dd>
+          </dl>
+        </Cartao>
+        <Cartao titulo="Margem para crescer">
+          {perfil.proLaboreMensalCentavos > 0 ? (
+            <>
+              <div className={`text-2xl font-semibold ${folga < 0 ? "text-negativo" : ""}`}>
+                <Valor centavos={d.receitaMensalMaximaCentavos} />
+              </div>
+              <div className="mt-1 text-xs text-suave">
+                receita média mensal máxima para manter o Fator R com pró-labore de {formatarMoeda(perfil.proLaboreMensalCentavos)}
+              </div>
+              <dl className="mt-3 grid grid-cols-2 gap-1 text-sm">
+                <dt className="text-suave">Pró-labore mínimo hoje</dt>
+                <dd className="text-right"><Valor centavos={d.proLaboreMinimoCentavos} /></dd>
+                <dt className="text-suave">Média atual</dt>
+                <dd className="text-right"><Valor centavos={Math.round(d.rbt12Centavos / 12)} /></dd>
+              </dl>
+            </>
+          ) : (
+            <p className="text-sm text-suave">Cadastre o pró-labore para calcular.</p>
+          )}
+        </Cartao>
+      </div>
+
+      {d.anexo === "III" && economiaMensal > 0 && (
+        <p className="text-sm text-suave">
+          Manter o Fator R acima de 28% está economizando cerca de <strong className="text-foreground">{formatarMoeda(economiaMensal)}</strong>{" "}
+          de DAS neste mês em relação ao Anexo V.
+          {folga < 0 && " Atenção: sua receita média já passou do limite; considere ajustar o pró-labore."}
+        </p>
+      )}
+
+      <Cartao titulo="Receita bruta por mês">
+        <BarrasMensais titulo="" cor="pj" dados={ind.receitaMensal.map((m) => ({ mes: m.mes, valor: m.valorCentavos }))} />
+        <p className="mt-3 text-xs text-suave">
+          Fonte:{" "}
+          {ind.fonte === "notas"
+            ? "notas fiscais autorizadas."
+            : ind.fonte === "misto"
+              ? "notas fiscais autorizadas; nos meses sem nota, cobranças recebidas."
+              : "cobranças recebidas (não há notas fiscais sincronizadas)."}{" "}
+          O último mês é o atual, ainda em andamento.
+        </p>
+      </Cartao>
+    </>
+  );
+}

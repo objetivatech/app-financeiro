@@ -1,0 +1,842 @@
+{
+  "id": "7db994b7-41e0-49f6-86f0-c589d358a7e4",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.analises": {
+      "name": "analises",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "periodo_inicio": {
+          "name": "periodo_inicio",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "periodo_fim": {
+          "name": "periodo_fim",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "conteudo": {
+          "name": "conteudo",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "criado_em": {
+          "name": "criado_em",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.categorias": {
+      "name": "categorias",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "nome": {
+          "name": "nome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "escopo": {
+          "name": "escopo",
+          "type": "escopo",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "grupo": {
+          "name": "grupo",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.configuracoes": {
+      "name": "configuracoes",
+      "schema": "",
+      "columns": {
+        "chave": {
+          "name": "chave",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "valor": {
+          "name": "valor",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "atualizado_em": {
+          "name": "atualizado_em",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.contas": {
+      "name": "contas",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "instituicao_id": {
+          "name": "instituicao_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "instituicao_nome": {
+          "name": "instituicao_nome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "apelido": {
+          "name": "apelido",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tipo": {
+          "name": "tipo",
+          "type": "tipo_conta",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'corrente'"
+        },
+        "agencia": {
+          "name": "agencia",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "numero": {
+          "name": "numero",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "final_cartao": {
+          "name": "final_cartao",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "titular_id": {
+          "name": "titular_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "escopo_padrao": {
+          "name": "escopo_padrao",
+          "type": "escopo_conta",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'misto'"
+        },
+        "ativa": {
+          "name": "ativa",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "candidata_encerrar": {
+          "name": "candidata_encerrar",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "observacao": {
+          "name": "observacao",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "criado_em": {
+          "name": "criado_em",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "contas_instituicao_idx": {
+          "name": "contas_instituicao_idx",
+          "columns": [
+            {
+              "expression": "instituicao_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "contas_titular_id_titulares_id_fk": {
+          "name": "contas_titular_id_titulares_id_fk",
+          "tableFrom": "contas",
+          "tableTo": "titulares",
+          "columnsFrom": [
+            "titular_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.importacoes": {
+      "name": "importacoes",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "conta_id": {
+          "name": "conta_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "nome_arquivo": {
+          "name": "nome_arquivo",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "hash_arquivo": {
+          "name": "hash_arquivo",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "formato": {
+          "name": "formato",
+          "type": "formato_arquivo",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "extraido_por": {
+          "name": "extraido_por",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "periodo_inicio": {
+          "name": "periodo_inicio",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "periodo_fim": {
+          "name": "periodo_fim",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "saldo_final_centavos": {
+          "name": "saldo_final_centavos",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "qtd_novas": {
+          "name": "qtd_novas",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "qtd_duplicadas": {
+          "name": "qtd_duplicadas",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "avisos": {
+          "name": "avisos",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "criado_em": {
+          "name": "criado_em",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "importacoes_conta_id_contas_id_fk": {
+          "name": "importacoes_conta_id_contas_id_fk",
+          "tableFrom": "importacoes",
+          "tableTo": "contas",
+          "columnsFrom": [
+            "conta_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "importacoes_hash_arquivo_unique": {
+          "name": "importacoes_hash_arquivo_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "hash_arquivo"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.regras": {
+      "name": "regras",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "padrao": {
+          "name": "padrao",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "conta_id": {
+          "name": "conta_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "escopo": {
+          "name": "escopo",
+          "type": "escopo",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "categoria_id": {
+          "name": "categoria_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "natureza": {
+          "name": "natureza",
+          "type": "natureza",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "criado_em": {
+          "name": "criado_em",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "regras_conta_id_contas_id_fk": {
+          "name": "regras_conta_id_contas_id_fk",
+          "tableFrom": "regras",
+          "tableTo": "contas",
+          "columnsFrom": [
+            "conta_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "regras_categoria_id_categorias_id_fk": {
+          "name": "regras_categoria_id_categorias_id_fk",
+          "tableFrom": "regras",
+          "tableTo": "categorias",
+          "columnsFrom": [
+            "categoria_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.titulares": {
+      "name": "titulares",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "tipo": {
+          "name": "tipo",
+          "type": "escopo",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "nome": {
+          "name": "nome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "documento": {
+          "name": "documento",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "regime_tributario": {
+          "name": "regime_tributario",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "criado_em": {
+          "name": "criado_em",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "titulares_documento_unique": {
+          "name": "titulares_documento_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "documento"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.transacoes": {
+      "name": "transacoes",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "conta_id": {
+          "name": "conta_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "importacao_id": {
+          "name": "importacao_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "data": {
+          "name": "data",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "descricao": {
+          "name": "descricao",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "descricao_normalizada": {
+          "name": "descricao_normalizada",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "valor_centavos": {
+          "name": "valor_centavos",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "id_externo": {
+          "name": "id_externo",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "hash_dedup": {
+          "name": "hash_dedup",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "nome_contraparte": {
+          "name": "nome_contraparte",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "documento_contraparte": {
+          "name": "documento_contraparte",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "parcela_atual": {
+          "name": "parcela_atual",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "parcela_total": {
+          "name": "parcela_total",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "escopo": {
+          "name": "escopo",
+          "type": "escopo",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "categoria_id": {
+          "name": "categoria_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "natureza": {
+          "name": "natureza",
+          "type": "natureza",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'comum'"
+        },
+        "classificado_por": {
+          "name": "classificado_por",
+          "type": "origem_classificacao",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "confianca": {
+          "name": "confianca",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "motivo": {
+          "name": "motivo",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "par_transferencia_id": {
+          "name": "par_transferencia_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "revisar": {
+          "name": "revisar",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "criado_em": {
+          "name": "criado_em",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "transacoes_dedup_idx": {
+          "name": "transacoes_dedup_idx",
+          "columns": [
+            {
+              "expression": "conta_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "hash_dedup",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "transacoes_data_idx": {
+          "name": "transacoes_data_idx",
+          "columns": [
+            {
+              "expression": "data",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "transacoes_revisar_idx": {
+          "name": "transacoes_revisar_idx",
+          "columns": [
+            {
+              "expression": "revisar",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"transacoes\".\"revisar\" = true",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "transacoes_conta_id_contas_id_fk": {
+          "name": "transacoes_conta_id_contas_id_fk",
+          "tableFrom": "transacoes",
+          "tableTo": "contas",
+          "columnsFrom": [
+            "conta_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "transacoes_importacao_id_importacoes_id_fk": {
+          "name": "transacoes_importacao_id_importacoes_id_fk",
+          "tableFrom": "transacoes",
+          "tableTo": "importacoes",
+          "columnsFrom": [
+            "importacao_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "transacoes_categoria_id_categorias_id_fk": {
+          "name": "transacoes_categoria_id_categorias_id_fk",
+          "tableFrom": "transacoes",
+          "tableTo": "categorias",
+          "columnsFrom": [
+            "categoria_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.escopo_conta": {
+      "name": "escopo_conta",
+      "schema": "public",
+      "values": [
+        "PF",
+        "PJ",
+        "misto"
+      ]
+    },
+    "public.escopo": {
+      "name": "escopo",
+      "schema": "public",
+      "values": [
+        "PF",
+        "PJ"
+      ]
+    },
+    "public.formato_arquivo": {
+      "name": "formato_arquivo",
+      "schema": "public",
+      "values": [
+        "ofx",
+        "csv",
+        "pdf",
+        "imagem"
+      ]
+    },
+    "public.natureza": {
+      "name": "natureza",
+      "schema": "public",
+      "values": [
+        "comum",
+        "transferencia_interna",
+        "retirada_socio",
+        "pro_labore",
+        "distribuicao_lucros",
+        "aporte_socio",
+        "despesa_pessoal_na_pj",
+        "despesa_pj_na_pf",
+        "pagamento_fatura",
+        "imposto",
+        "estorno",
+        "investimento"
+      ]
+    },
+    "public.origem_classificacao": {
+      "name": "origem_classificacao",
+      "schema": "public",
+      "values": [
+        "conta",
+        "regra",
+        "heuristica",
+        "transferencia",
+        "ia",
+        "usuario"
+      ]
+    },
+    "public.tipo_conta": {
+      "name": "tipo_conta",
+      "schema": "public",
+      "values": [
+        "corrente",
+        "pagamento",
+        "poupanca",
+        "cartao_credito",
+        "investimento"
+      ]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

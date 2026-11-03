@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f7f7f5;
+  --superficie: #ffffff;
+  --foreground: #1c1c1a;
+  --suave: #6b6b66;
+  --borda: #e4e4df;
+  --pf: #7c3aed;
+  --pj: #00897b;
+  --positivo: #15803d;
+  --negativo: #b91c1c;
+  --alerta: #b45309;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #121211;
+    --superficie: #1b1b19;
+    --foreground: #ecece8;
+    --suave: #9a9a93;
+    --borda: #2e2e2b;
+    --pf: #8a68ee;
+    --pj: #139a8a;
+    --positivo: #4ade80;
+    --negativo: #f87171;
+    --alerta: #c4850f;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-superficie: var(--superficie);
+  --color-foreground: var(--foreground);
+  --color-suave: var(--suave);
+  --color-borda: var(--borda);
+  --color-pf: var(--pf);
+  --color-pj: var(--pj);
+  --color-positivo: var(--positivo);
+  --color-negativo: var(--negativo);
+  --color-alerta: var(--alerta);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.numero {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Manual e changelog renderizados em /ajuda */
+.manual h1 { font-size: 1.5rem; font-weight: 600; margin: 2rem 0 0.75rem; }
+.manual h2 { font-size: 1.2rem; font-weight: 600; margin: 2rem 0 0.5rem; padding-top: 1rem; border-top: 1px solid var(--borda); }
+.manual h3 { font-size: 1rem; font-weight: 600; margin: 1.25rem 0 0.4rem; }
+.manual p, .manual li { font-size: 0.925rem; line-height: 1.6; }
+.manual p { margin: 0.5rem 0; }
+.manual ul, .manual ol { margin: 0.5rem 0 0.5rem 1.25rem; }
+.manual ul { list-style: disc; }
+.manual ol { list-style: decimal; }
+.manual code { font-family: var(--font-mono); font-size: 0.85em; background: color-mix(in srgb, var(--foreground) 6%, transparent); padding: 0.1em 0.3em; border-radius: 4px; }
+.manual pre { background: color-mix(in srgb, var(--foreground) 6%, transparent); padding: 0.75rem; border-radius: 6px; overflow-x: auto; margin: 0.75rem 0; }
+.manual pre code { background: none; padding: 0; }
+.manual table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.875rem; }
+.manual th, .manual td { border-bottom: 1px solid var(--borda); padding: 0.35rem 0.5rem; text-align: left; vertical-align: top; }
+.manual a { text-decoration: underline; }
+.manual blockquote { border-left: 3px solid var(--alerta); padding-left: 0.75rem; color: var(--suave); margin: 0.75rem 0; }
