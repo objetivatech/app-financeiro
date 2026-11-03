@@ -4,7 +4,7 @@ import { z } from "zod";
 import { INSTITUICOES, instituicaoPorTexto } from "../instituicoes/catalogo";
 import type { ExtratoNormalizado, FormatoArquivo } from "../importacao/tipos";
 import { parseData } from "../importacao/util";
-import { BETA_FALLBACK, ErroIa, MODELO_IA, obterClienteIa } from "./cliente";
+import { ErroIa, modeloDa, obterClienteIa, opcoesDeFallback, registrarUso } from "./cliente";
 
 const EsquemaExtrato = z.object({
   instituicao_nome: z.string().nullable().describe("Nome do banco/instituição/emissor como aparece no documento"),
@@ -61,16 +61,41 @@ export interface EntradaExtracao {
   signal?: AbortSignal;
 }
 
-function blocoDocumento(entrada: EntradaExtracao): Anthropic.Beta.BetaContentBlockParam {
-  const base64 = Buffer.from(entrada.bytes).toString("base64");
+/**
+ * Texto da camada digital do PDF (extratos baixados do banco quase sempre têm).
+ * Mandar só o texto custa uma fração de mandar o PDF inteiro, que vai com a imagem de cada página.
+ * PDF escaneado (sem texto) volta null e segue como documento.
+ */
+export async function textoDoPdf(bytes: Uint8Array): Promise<string | null> {
+  try {
+    const { extractText, getDocumentProxy } = await import("unpdf");
+    const pdf = await getDocumentProxy(new Uint8Array(bytes));
+    const { text } = await extractText(pdf, { mergePages: false });
+    const paginas = (Array.isArray(text) ? text : [text]).map((t, i) => `--- Página ${i + 1} ---\n${t.trim()}`);
+    const tudo = paginas.join("\n\n");
+    // Pouco texto ou sem números: provavelmente escaneado ou só imagens.
+    const digitos = (tudo.match(/\d/g) ?? []).length;
+    return tudo.replace(/--- Página \d+ ---/g, "").trim().length >= 80 && digitos >= 10 ? tudo : null;
+  } catch {
+    return null;
+  }
+}
+
+async function blocoDocumento(entrada: EntradaExtracao): Promise<{ bloco: Anthropic.Beta.BetaContentBlockParam; comoTexto: boolean }> {
   if (entrada.formato === "pdf") {
-    return { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } };
+    const texto = await textoDoPdf(entrada.bytes);
+    if (texto) {
+      return { bloco: { type: "text", text: `Texto extraído do PDF "${entrada.nomeArquivo}":\n\n${texto}` }, comoTexto: true };
+    }
+    const base64 = Buffer.from(entrada.bytes).toString("base64");
+    return { bloco: { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } }, comoTexto: false };
   }
   if (entrada.formato === "imagem") {
+    const base64 = Buffer.from(entrada.bytes).toString("base64");
     const mime = entrada.mimeType as "image/png" | "image/jpeg" | "image/webp" | "image/gif";
-    return { type: "image", source: { type: "base64", media_type: mime, data: base64 } };
+    return { bloco: { type: "image", source: { type: "base64", media_type: mime, data: base64 } }, comoTexto: false };
   }
-  return { type: "text", text: `Conteúdo do arquivo CSV "${entrada.nomeArquivo}":\n\n${entrada.texto ?? ""}` };
+  return { bloco: { type: "text", text: `Conteúdo do arquivo CSV "${entrada.nomeArquivo}":\n\n${entrada.texto ?? ""}` }, comoTexto: true };
 }
 
 /**
@@ -79,25 +104,27 @@ function blocoDocumento(entrada: EntradaExtracao): Anthropic.Beta.BetaContentBlo
  */
 export async function extrairComIa(entrada: EntradaExtracao): Promise<ExtratoNormalizado> {
   const cliente = obterClienteIa();
+  const modelo = modeloDa("extracao");
+  const { bloco } = await blocoDocumento(entrada);
   const stream = cliente.beta.messages.stream({
-    model: MODELO_IA,
+    model: modelo,
     max_tokens: 64000,
-    betas: [BETA_FALLBACK],
-    fallbacks: "default",
-    // Transcrever um extrato não exige raciocínio longo: esforço baixo deixa a leitura bem mais rápida.
+    ...opcoesDeFallback(modelo),
+    // Transcrever um extrato não exige raciocínio longo: esforço baixo deixa a leitura rápida e barata.
     output_config: { effort: "low", format: betaZodOutputFormat(EsquemaExtrato) },
     system: SISTEMA,
     messages: [
       {
         role: "user",
         content: [
-          blocoDocumento(entrada),
+          bloco,
           { type: "text", text: `Nome do arquivo: ${entrada.nomeArquivo}\nExtraia o extrato completo.` },
         ],
       },
     ],
   }, { signal: entrada.signal });
   const resposta = await stream.finalMessage();
+  await registrarUso("extracao", modelo, resposta.usage);
 
   if (resposta.stop_reason === "refusal") {
     throw new ErroIa("A IA recusou processar este documento.");

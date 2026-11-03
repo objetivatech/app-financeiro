@@ -3,6 +3,19 @@
 Todas as mudanças relevantes do app, da mais recente para a mais antiga. O formato segue
 [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e as versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.4.0] — 2026-11-03
+
+### Alterado
+- **IA bem mais barata.** Cada tarefa agora usa o modelo adequado: **Claude Haiku 5.5** para ler PDFs/fotos e
+  classificar transações (cerca de 40× mais barato que o Opus) e **Claude Opus 5.5** só para o diagnóstico mensal.
+  Os modelos podem ser trocados pelas variáveis `MODELO_EXTRACAO`, `MODELO_CLASSIFICACAO` e `MODELO_ANALISE`.
+- **PDFs com texto são lidos no próprio servidor** e só o texto vai para a IA (antes ia o PDF inteiro, com a imagem
+  de cada página). PDFs escaneados continuam indo como arquivo.
+
+### Adicionado
+- **Custo da IA** em Configurações: modelo de cada tarefa e gasto estimado no mês (chamadas, tokens e US$).
+- **Versão instalada** no canto do menu (leva às novidades): para conferir se a atualização chegou à VPS.
+
 ## [0.3.0] — 2026-11-03
 
 ### Adicionado

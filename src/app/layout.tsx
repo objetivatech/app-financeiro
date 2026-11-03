@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
+import { version } from "../../package.json";
 import "./globals.css";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
@@ -37,6 +38,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
                 {l.rotulo}
               </Link>
             ))}
+            <Link href="/ajuda#novidades" className="ml-auto text-xs text-suave hover:text-foreground" title="Versão instalada: veja as novidades">
+              v{version}
+            </Link>
           </nav>
         </header>
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6">{children}</main>

@@ -5,7 +5,7 @@ Este manual explica cada tela do app e como os números são calculados. Ele é 
 
 **Sumário:** [Conceitos](#conceitos) · [Painel](#painel) · [Transações](#transacoes) · [A receber](#receber) ·
 [Impostos e Fator R](#impostos) · [Importar](#importar) · [Contas](#contas) · [Integrações](#integracoes) ·
-[Configurações](#configuracoes) · [Rotina sugerida](#rotina) · [Novidades](#novidades)
+[Configurações](#configuracoes) · [Custo da IA](#custos-ia) · [Rotina sugerida](#rotina) · [Novidades](#novidades)
 
 <a id="conceitos"></a>
 
@@ -195,8 +195,38 @@ Traz automaticamente, só lendo (o app nunca cria cobranças nem movimenta dinhe
 - **Dados financeiros e fiscais:** pró-labore mensal (base do Fator R e do INSS), custo fixo mensal da empresa (base
   da reserva de caixa), e-mail para os resumos e se a atividade principal está sujeita ao Fator R.
 - **Sobre você e sua empresa:** texto livre usado pela IA para classificar e aconselhar melhor.
-- **Inteligência artificial:** se está ativa e o que é enviado a ela (CPF/CNPJ nunca vão na classificação nem nas dicas).
+- **Inteligência artificial:** modelos usados, gasto estimado no mês e o que é enviado (CPF/CNPJ nunca vão na
+  classificação nem nas dicas). Veja [Custo da IA](#custos-ia).
 - **Regras aprendidas:** as regras criadas a partir das correções; dá para excluir.
+
+<a id="custos-ia"></a>
+
+## Custo da IA
+
+A IA é cobrada pela Anthropic por **tokens** (pedaços de texto) enviados e recebidos. Para gastar pouco:
+
+| Tarefa | Modelo padrão | Por quê |
+|---|---|---|
+| Ler PDFs e fotos de extrato | Claude Haiku 5.5 | Muito volume e tarefa simples (transcrever) |
+| Classificar transações | Claude Haiku 5.5 | Muito volume, decisões curtas |
+| Diagnóstico mensal | Claude Opus 5.5 | Uma chamada por mês, precisa de raciocínio melhor |
+
+Referência de preço (por milhão de tokens): Haiku 5.5 US$ 0,10 de entrada e US$ 0,50 de saída; Opus 5.5 US$ 4 e
+US$ 20.
+
+**Como gastar ainda menos**
+
+- Prefira **OFX ou CSV**: são lidos pelo app, sem IA nenhuma.
+- **PDF baixado do banco** (com texto) é lido no servidor e só o texto vai para a IA. **Foto e PDF escaneado** vão
+  inteiros e custam mais.
+- Integrações (como o **Asaas**) não usam IA para trazer os dados.
+- Crie **regras** ao corrigir transações: o que a regra resolve não vai para a IA.
+
+**Trocar o modelo de uma tarefa:** no `.env`, defina `MODELO_EXTRACAO`, `MODELO_CLASSIFICACAO` ou `MODELO_ANALISE`
+(ex.: `MODELO_ANALISE=claude-sonnet-5-5`) e rode `docker compose up -d`.
+
+O quadro em **Configurações → Inteligência artificial** mostra o gasto estimado do mês. O valor oficial fica no
+console da Anthropic, onde também dá para definir um **limite mensal de gasto**.
 
 <a id="rotina"></a>
 

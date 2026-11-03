@@ -1,6 +1,6 @@
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
-import { BETA_FALLBACK, ErroIa, MODELO_IA, obterClienteIa } from "../ia/cliente";
+import { ErroIa, modeloDa, obterClienteIa, opcoesDeFallback, registrarUso } from "../ia/cliente";
 import type { Escopo, TipoConta } from "../importacao/tipos";
 import { CATEGORIAS_PADRAO } from "./categorias";
 
@@ -54,6 +54,7 @@ export async function classificarComIa(
   signal?: AbortSignal,
 ): Promise<ClassificacaoIa[]> {
   const cliente = obterClienteIa();
+  const modelo = modeloDa("classificacao");
   const resultado: ClassificacaoIa[] = [];
 
   for (let i = 0; i < itens.length; i += TAMANHO_LOTE) {
@@ -69,10 +70,9 @@ export async function classificarComIa(
       }),
     );
     const resposta = await cliente.beta.messages.parse({
-      model: MODELO_IA,
+      model: modelo,
       max_tokens: 16000,
-      betas: [BETA_FALLBACK],
-      fallbacks: "default",
+      ...opcoesDeFallback(modelo),
       output_config: { effort: "low", format: betaZodOutputFormat(EsquemaClassificacao) },
       system: sistema(perfil),
       messages: [
@@ -82,6 +82,7 @@ export async function classificarComIa(
         },
       ],
     }, { signal });
+    await registrarUso("classificacao", modelo, resposta.usage);
     if (resposta.stop_reason === "refusal") throw new ErroIa("A IA recusou classificar este lote.");
     if (!resposta.parsed_output) throw new ErroIa("A IA não devolveu a classificação no formato esperado.");
 

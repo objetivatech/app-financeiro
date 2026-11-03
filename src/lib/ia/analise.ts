@@ -5,7 +5,7 @@ import { obterPerfil } from "../classificacao/executar";
 import { despesasPorCategoria, resumoDoPeriodo, serieMensal, type Periodo } from "../consultas";
 import type { Db } from "../db";
 import { analises, transacoes } from "../db/schema";
-import { BETA_FALLBACK, ErroIa, MODELO_IA, obterClienteIa } from "./cliente";
+import { ErroIa, modeloDa, obterClienteIa, opcoesDeFallback, registrarUso } from "./cliente";
 
 export const EsquemaAnalise = z.object({
   resumo: z.string().describe("Diagnóstico do período em 3 a 5 frases, direto ao ponto"),
@@ -104,15 +104,16 @@ export async function gerarAnalise(db: Db, p: Periodo): Promise<{ id: number; an
   };
 
   const cliente = obterClienteIa();
+  const modelo = modeloDa("analise");
   const resposta = await cliente.beta.messages.parse({
-    model: MODELO_IA,
+    model: modelo,
     max_tokens: 16000,
-    betas: [BETA_FALLBACK],
-    fallbacks: "default",
+    ...opcoesDeFallback(modelo),
     output_config: { effort: "high", format: betaZodOutputFormat(EsquemaAnalise) },
     system: SISTEMA,
     messages: [{ role: "user", content: `Dados do período (JSON):\n${JSON.stringify(dados, null, 1)}` }],
   });
+  await registrarUso("analise", modelo, resposta.usage);
   if (resposta.stop_reason === "refusal") throw new ErroIa("A IA recusou gerar a análise.");
   if (!resposta.parsed_output) throw new ErroIa("A IA não devolveu a análise no formato esperado.");
 

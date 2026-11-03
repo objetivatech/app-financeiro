@@ -5,7 +5,8 @@ import { CATEGORIAS_PADRAO } from "@/lib/classificacao/categorias";
 import { obterPerfil } from "@/lib/classificacao/executar";
 import { obterDb } from "@/lib/db";
 import { formatarMoeda, ROTULOS_NATUREZA } from "@/lib/formato";
-import { iaDisponivel, MODELO_IA } from "@/lib/ia/cliente";
+import { iaDisponivel, modeloDa } from "@/lib/ia/cliente";
+import { custosDoMes } from "@/lib/ia/custos";
 import { LinkAjuda } from "@/components/link-ajuda";
 import { obterPerfilFiscal } from "@/lib/fiscal/perfil";
 import { excluirRegra, salvarDadosFiscais, salvarPerfil } from "./acoes";
@@ -34,6 +35,8 @@ async function Conteudo() {
     db.query.regras.findMany({ orderBy: (r, { desc }) => [desc(r.id)] }),
     obterPerfilFiscal(db),
   ]);
+  const custos = await custosDoMes(db);
+  const custoTotal = custos.reduce((t, c) => t + c.custoUsd, 0);
   const nomeCategoria = new Map(CATEGORIAS_PADRAO.map((c) => [c.id, c.nome]));
 
   return (
@@ -75,21 +78,55 @@ async function Conteudo() {
         </form>
       </Cartao>
 
-      <Cartao titulo="Inteligência artificial">
-        <p className="text-sm">
-          {iaDisponivel() ? (
-            <>
-              Ativa, usando o modelo <code>{MODELO_IA}</code>.
-            </>
-          ) : (
-            <>
-              Desativada: defina <code>ANTHROPIC_API_KEY</code> no arquivo <code>.env</code> do servidor.
-            </>
-          )}
-        </p>
-        <p className="mt-2 text-xs text-suave">
-          O que é enviado: PDFs e imagens de extrato (para leitura), descrição/data/valor das transações (para
-          classificar) e totais agregados (para as dicas). CPF/CNPJ não são enviados na classificação nem nas dicas.
+      <Cartao titulo={<>Inteligência artificial <LinkAjuda secao="custos-ia" /></>}>
+        {iaDisponivel() ? (
+          <div className="space-y-3 text-sm">
+            <table className="w-full max-w-md">
+              <tbody>
+                {(
+                  [
+                    ["Ler PDFs e fotos", "extracao"],
+                    ["Classificar transações", "classificacao"],
+                    ["Diagnóstico mensal", "analise"],
+                  ] as const
+                ).map(([rotulo, tarefa]) => (
+                  <tr key={tarefa} className="border-t border-borda first:border-0">
+                    <td className="py-1 pr-3 text-suave">{rotulo}</td>
+                    <td className="py-1 font-mono text-xs">{modeloDa(tarefa)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div>
+              <div className="font-medium">
+                Gasto estimado este mês: US$ {custoTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+              </div>
+              {custos.length > 0 ? (
+                <ul className="mt-1 text-xs text-suave">
+                  {custos.map((c) => (
+                    <li key={c.tarefa + c.modelo}>
+                      {c.tarefa} · {c.modelo}: {c.chamadas} chamada(s), {c.tokens.toLocaleString("pt-BR")} tokens, US${" "}
+                      {c.custoUsd.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-xs text-suave">Nenhum uso registrado neste mês.</p>
+              )}
+              <p className="mt-1 text-xs text-suave">
+                Estimativa pela tabela de preços da Anthropic; o valor oficial está no console da Anthropic.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm">
+            Desativada: defina <code>ANTHROPIC_API_KEY</code> no arquivo <code>.env</code> do servidor.
+          </p>
+        )}
+        <p className="mt-3 text-xs text-suave">
+          O que é enviado: texto de PDFs (ou o arquivo, quando é escaneado) e fotos de extrato (para leitura),
+          descrição/data/valor das transações (para classificar) e totais agregados (para as dicas). CPF/CNPJ não são
+          enviados na classificação nem nas dicas.
         </p>
       </Cartao>
 

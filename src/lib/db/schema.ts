@@ -286,3 +286,20 @@ export const notasFiscais = pgTable(
 
 export type Compromisso = typeof compromissos.$inferSelect;
 export type Cliente = typeof clientes.$inferSelect;
+
+/** Consumo da IA por chamada, para acompanhar o custo (Configurações → Inteligência artificial). */
+export const usoIa = pgTable(
+  "uso_ia",
+  {
+    id: serial("id").primaryKey(),
+    tarefa: text("tarefa").notNull(),
+    modelo: text("modelo").notNull(),
+    tokensEntrada: integer("tokens_entrada").notNull(),
+    tokensSaida: integer("tokens_saida").notNull(),
+    tokensCache: integer("tokens_cache").notNull().default(0),
+    /** Custo estimado em milionésimos de dólar (pela tabela de preços em ia/cliente.ts). */
+    custoMicroUsd: bigint("custo_micro_usd", { mode: "number" }).notNull(),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("uso_ia_criado_idx").on(t.criadoEm)],
+);

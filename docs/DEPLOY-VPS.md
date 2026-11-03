@@ -79,5 +79,26 @@ git pull
 docker compose up -d --build
 ```
 
+Se usa o túnel da Cloudflare, rode `docker compose --profile tunel up -d --build` (o perfil mantém o
+`cloudflared` junto).
+
 As migrações do banco rodam sozinhas (serviço `migrar`) antes de o app subir. Veja o que mudou em `CHANGELOG.md`
 ou em **Ajuda → Novidades** no app.
+
+### A atualização não apareceu?
+
+O número da versão fica no canto direito do menu do app (ex.: `v0.4.0`). Se ele não mudou:
+
+```bash
+cd ~/app-financeiro
+git branch --show-current      # em qual branch a VPS está
+git log --oneline -1           # último commit baixado
+git status --short             # arquivos alterados localmente impedem o pull
+docker compose ps              # o app foi recriado agora há pouco?
+docker compose logs --tail 30 migrar app
+```
+
+- Se o `git log` não mostra o commit mais recente do GitHub, o `git pull` não trouxe nada: confira se a VPS está
+  no branch padrão do repositório (o mesmo do GitHub).
+- Se o commit está certo mas a versão não mudou, a imagem não foi refeita: rode de novo com `--build`.
+- No navegador, recarregue com Ctrl+Shift+R para não usar a página guardada em cache.

@@ -11,8 +11,10 @@ Navegador ──(Cloudflare Access + Tunnel)──► Next.js (VPS, Docker) ─�
 - **Next.js 16 (App Router, TypeScript)** — telas e uma rota de importação (`/api/importar`). Componentes de servidor
   leem o banco direto; mutações via Server Actions.
 - **PostgreSQL 16 + Drizzle ORM** — schema em `src/lib/db/schema.ts`, migrações em `drizzle/`.
-- **Claude (Anthropic)** — via `@anthropic-ai/sdk`, com saída estruturada (schemas Zod) e fallback automático de
-  modelo em caso de recusa (`fallbacks: "default"`).
+- **Claude (Anthropic)** — via `@anthropic-ai/sdk`, com saída estruturada (schemas Zod). Modelo por tarefa
+  (`ia/cliente.ts`): Haiku 5.5 para extração e classificação, Opus 5.5 para a análise mensal; fallback de recusa
+  (`fallbacks: "default"`) só nos modelos que suportam. Cada chamada registra tokens e custo estimado em `uso_ia`.
+  PDFs com camada de texto são lidos localmente (`unpdf`) e só o texto vai para a IA.
 
 A VPS (2 vCPU / 4 GB) roda app e banco com folga para um usuário. Rodar um modelo de IA local nessa máquina não vale a
 pena: os modelos que cabem em 4 GB são lentos e fracos em português e em raciocínio financeiro.
