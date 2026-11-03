@@ -1,3 +1,4 @@
+import { LinkAjuda } from "@/components/link-ajuda";
 import { connection } from "next/server";
 import Link from "next/link";
 import { Suspense } from "react";
@@ -11,7 +12,9 @@ export default function PaginaContas() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold">Contas e cartões</h1>
+        <h1 className="text-xl font-semibold">
+          Contas e cartões <LinkAjuda secao="contas" />
+        </h1>
         <p className="mt-1 text-sm text-suave">
           As contas aparecem aqui conforme você importa extratos. Diga de quem é cada uma (PF, PJ ou mista): isso guia a
           classificação e a detecção de mistura.

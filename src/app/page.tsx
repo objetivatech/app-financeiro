@@ -10,6 +10,8 @@ import { analises } from "@/lib/db/schema";
 import { deslocarMes, formatarMes, formatarMoeda } from "@/lib/formato";
 import { EsquemaAnalise } from "@/lib/ia/analise";
 import { iaDisponivel } from "@/lib/ia/cliente";
+import { LinkAjuda } from "@/components/link-ajuda";
+import { indicadoresFiscais, resumoRecebiveis } from "@/lib/fiscal/indicadores";
 import { BotaoAnalise } from "./botao-analise";
 
 type Busca = Promise<Record<string, string | string[] | undefined>>;
@@ -45,7 +47,7 @@ async function Conteudo({ searchParams }: { searchParams: Busca }) {
   }
 
   const periodo = periodoDoMes(mes);
-  const [resumo, categorias, serie, ultimaAnalise] = await Promise.all([
+  const [resumo, categorias, serie, ultimaAnalise, recebiveis, fiscal] = await Promise.all([
     resumoDoPeriodo(db, periodo),
     despesasPorCategoria(db, periodo),
     serieMensal(db, 6, mes),
@@ -53,14 +55,20 @@ async function Conteudo({ searchParams }: { searchParams: Busca }) {
       where: and(eq(analises.periodoInicio, periodo.inicio), eq(analises.periodoFim, periodo.fim)),
       orderBy: [desc(analises.id)],
     }),
+    resumoRecebiveis(db),
+    indicadoresFiscais(db),
   ]);
+  const temRecebiveis = recebiveis.aReceber30dQtd + recebiveis.vencidoQtd > 0 || recebiveis.recebidoMesCentavos > 0;
+  const temFiscal = fiscal.mesesComDados > 0 && fiscal.perfil.proLaboreMensalCentavos > 0;
   const resultadoPj = resumo.pjReceitas - resumo.pjDespesas;
   const saiuDaEmpresa = resumo.retiradas + resumo.pessoalNaPj;
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold">Painel de {formatarMes(mes)}</h1>
+        <h1 className="text-xl font-semibold">
+          Painel de {formatarMes(mes)} <LinkAjuda secao="painel" />
+        </h1>
         <div className="flex gap-3 text-sm">
           <Link href={`/?mes=${deslocarMes(mes, -1)}`} className="underline">
             ← {formatarMes(deslocarMes(mes, -1))}
@@ -127,6 +135,36 @@ async function Conteudo({ searchParams }: { searchParams: Busca }) {
           </dl>
         </Cartao>
       </div>
+
+      {(temRecebiveis || temFiscal) && (
+        <div className="grid gap-3 md:grid-cols-3">
+          {temRecebiveis && (
+            <Link href="/receber" className="rounded-lg border border-borda bg-superficie p-4 hover:border-foreground/30">
+              <div className="text-sm text-suave">A receber em 30 dias</div>
+              <div className="text-lg font-semibold"><Valor centavos={recebiveis.aReceber30dCentavos} /></div>
+              <div className="text-xs text-suave">{recebiveis.aReceber30dQtd} cobrança(s)</div>
+            </Link>
+          )}
+          {temRecebiveis && (
+            <Link href="/receber" className="rounded-lg border border-borda bg-superficie p-4 hover:border-foreground/30">
+              <div className="text-sm text-suave">Cobranças vencidas</div>
+              <div className={`text-lg font-semibold ${recebiveis.vencidoCentavos > 0 ? "text-negativo" : ""}`}>
+                <Valor centavos={recebiveis.vencidoCentavos} />
+              </div>
+              <div className="text-xs text-suave">{recebiveis.vencidoQtd} cobrança(s)</div>
+            </Link>
+          )}
+          {temFiscal && (
+            <Link href="/impostos" className="rounded-lg border border-borda bg-superficie p-4 hover:border-foreground/30">
+              <div className="text-sm text-suave">Fator R · Anexo {fiscal.diagnostico.anexo}</div>
+              <div className={`text-lg font-semibold ${fiscal.diagnostico.fatorR >= 0.28 ? "text-positivo" : "text-negativo"}`}>
+                {(fiscal.diagnostico.fatorR * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%
+              </div>
+              <div className="text-xs text-suave">DAS estimado do mês: <Valor centavos={fiscal.diagnostico.dasEstimadoCentavos} /></div>
+            </Link>
+          )}
+        </div>
+      )}
 
       {serie.length > 1 && (
         <Cartao titulo="Últimos meses">

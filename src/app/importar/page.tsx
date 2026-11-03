@@ -1,3 +1,4 @@
+import { LinkAjuda } from "@/components/link-ajuda";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { Cartao, Carregando } from "@/components/ui";
@@ -12,7 +13,9 @@ export default function PaginaImportar() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold">Importar extratos e faturas</h1>
+        <h1 className="text-xl font-semibold">
+          Importar extratos e faturas <LinkAjuda secao="importar" />
+        </h1>
         <p className="mt-1 text-sm text-suave">
           Arraste quantos arquivos quiser: OFX, CSV, PDF ou foto (PNG/JPG). O app identifica o banco, a conta e as
           transações, ignora o que já foi importado e classifica tudo como PF ou PJ.

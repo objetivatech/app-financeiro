@@ -1,3 +1,4 @@
+import { LinkAjuda } from "@/components/link-ajuda";
 import { connection } from "next/server";
 import Link from "next/link";
 import { Suspense } from "react";
@@ -15,7 +16,9 @@ type Busca = Promise<Record<string, string | string[] | undefined>>;
 export default function PaginaTransacoes({ searchParams }: { searchParams: Busca }) {
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-semibold">Transações</h1>
+      <h1 className="text-xl font-semibold">
+          Transações <LinkAjuda secao="transacoes" />
+        </h1>
       <Suspense fallback={<Carregando />}>
         <Conteudo searchParams={searchParams} />
       </Suspense>

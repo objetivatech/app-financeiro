@@ -1,7 +1,30 @@
-/** Ao subir o servidor, retoma importações que ficaram pela metade (ex.: após reiniciar o contêiner). */
+/**
+ * Roda uma vez quando o servidor sobe:
+ * - retoma importações que ficaram pela metade (ex.: após reiniciar o contêiner);
+ * - agenda a sincronização automática do Asaas (1 minuto após subir e depois a cada 6 horas).
+ */
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs" || !process.env.DATABASE_URL) return;
   const { obterDb } = await import("./lib/db");
   const { retomarFila } = await import("./lib/importacao/fila");
   retomarFila(obterDb()).catch((erro) => console.error("Não foi possível retomar a fila de importação", erro));
+
+  // Uma sincronização interrompida pelo reinício não está mais rodando.
+  const { integracoes } = await import("./lib/db/schema");
+  const { eq } = await import("drizzle-orm");
+  await obterDb()
+    .update(integracoes)
+    .set({ status: "erro", mensagem: "Sincronização interrompida (o servidor reiniciou)." })
+    .where(eq(integracoes.status, "sincronizando"))
+    .catch(() => undefined);
+
+  if (process.env.ASAAS_API_KEY && process.env.ASAAS_SINCRONIZACAO_AUTOMATICA !== "0") {
+    const { sincronizarAsaas } = await import("./lib/integracoes/asaas/sincronizar");
+    const rodar = () =>
+      sincronizarAsaas(obterDb())
+        .then((r) => console.log(`Asaas sincronizado: ${r.cobrancas} cobranças, ${r.lancamentosNovos} lançamentos novos`))
+        .catch((erro) => console.error("Sincronização automática do Asaas falhou:", erro instanceof Error ? erro.message : erro));
+    setTimeout(rodar, 60_000).unref();
+    setInterval(rodar, 6 * 60 * 60_000).unref();
+  }
 }

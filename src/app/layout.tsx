@@ -13,10 +13,14 @@ export const metadata: Metadata = {
 
 const LINKS = [
   { href: "/", rotulo: "Painel" },
-  { href: "/importar", rotulo: "Importar" },
   { href: "/transacoes", rotulo: "Transações" },
+  { href: "/receber", rotulo: "A receber" },
+  { href: "/impostos", rotulo: "Impostos" },
+  { href: "/importar", rotulo: "Importar" },
   { href: "/contas", rotulo: "Contas" },
+  { href: "/integracoes", rotulo: "Integrações" },
   { href: "/configuracoes", rotulo: "Configurações" },
+  { href: "/ajuda", rotulo: "Ajuda" },
 ];
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

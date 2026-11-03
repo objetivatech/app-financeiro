@@ -14,6 +14,9 @@ import { CATEGORIAS_PADRAO } from "../classificacao/categorias";
 import { classificarPendentes, reabrirClassificacaoDaConta } from "../classificacao/executar";
 import type { Db } from "../db";
 import * as schema from "../db/schema";
+import { indicadoresFiscais, resumoRecebiveis } from "../fiscal/indicadores";
+import { salvarPerfilFiscal } from "../fiscal/perfil";
+import { sincronizarAsaas } from "../integracoes/asaas/sincronizar";
 import { cancelarFila, enfileirar, estadoFila, retomarFila, situacaoDosTrabalhos } from "../importacao/fila";
 import { importarParaBanco } from "../importacao/persistir";
 
@@ -28,7 +31,7 @@ describe.skipIf(!url)("importação + classificação no banco", () => {
     pool = new Pool({ connectionString: url });
     db = drizzle(pool, { schema });
     await migrate(db, { migrationsFolder: "drizzle" });
-    await db.execute(sql`truncate trabalhos_importacao, transacoes, importacoes, regras, contas, titulares, categorias, configuracoes restart identity cascade`);
+    await db.execute(sql`truncate notas_fiscais, compromissos, clientes, integracoes, trabalhos_importacao, transacoes, importacoes, regras, contas, titulares, categorias, configuracoes restart identity cascade`);
     await db.insert(schema.categorias).values(CATEGORIAS_PADRAO);
   });
 
@@ -136,6 +139,78 @@ describe.skipIf(!url)("importação + classificação no banco", () => {
     } finally {
       delete process.env.ANTHROPIC_API_KEY;
       delete process.env.ANTHROPIC_BASE_URL;
+      servidor.closeAllConnections();
+      servidor.close();
+    }
+  });
+
+  it("Asaas: sincroniza cobranças, notas, clientes e extrato; concilia e calcula indicadores", async () => {
+    const hoje = new Date();
+    const dia = (deslocamento: number) => new Date(hoje.getTime() + deslocamento * 86_400_000).toISOString().slice(0, 10);
+    const mesPassado = new Date(Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth() - 1, 15)).toISOString().slice(0, 10);
+    const rotas: Record<string, unknown> = {
+      "/v3/finance/balance": { balance: 2345.67 },
+      "/v3/payments": {
+        hasMore: false,
+        data: [
+          { id: "pay_ok", customer: "cus_1", value: 1500, netValue: 1498.01, status: "RECEIVED", billingType: "PIX", dueDate: mesPassado, paymentDate: mesPassado, description: "SEO" },
+          { id: "pay_aberto", customer: "cus_2", value: 800, status: "PENDING", billingType: "BOLETO", dueDate: dia(10), description: "Site" },
+          { id: "pay_vencido", customer: "cus_2", value: 300, status: "OVERDUE", billingType: "BOLETO", dueDate: dia(-5), description: "Hospedagem" },
+        ],
+      },
+      "/v3/invoices": {
+        hasMore: false,
+        data: [{ id: "inv_1", status: "AUTHORIZED", customer: "cus_1", payment: "pay_ok", value: 1500, effectiveDate: mesPassado, municipalServiceCode: "7319-0/03" }],
+      },
+      "/v3/customers/cus_1": { id: "cus_1", name: "Cliente Um Ltda", cpfCnpj: "11.222.333/0001-81" },
+      "/v3/customers/cus_2": { id: "cus_2", name: "Cliente Dois" },
+      "/v3/financialTransactions": {
+        hasMore: false,
+        data: [
+          { id: "ft_1", date: mesPassado, value: 1500, balance: 1500, type: "PAYMENT_RECEIVED", paymentId: "pay_ok", description: "Cobrança recebida - Cliente Um" },
+          { id: "ft_2", date: mesPassado, value: -1.99, balance: 1498.01, type: "PAYMENT_FEE", paymentId: "pay_ok", description: "Taxa" },
+        ],
+      },
+    };
+    const pedidos: string[] = [];
+    const servidor = createServer((req, res) => {
+      const url = new URL(req.url ?? "/", "http://x");
+      pedidos.push(`${url.pathname}${url.search}`);
+      const corpo = req.headers["access_token"] === "chave-teste" ? rotas[url.pathname] : undefined;
+      res.writeHead(corpo ? 200 : req.headers["access_token"] ? 404 : 401, { "content-type": "application/json" });
+      res.end(JSON.stringify(corpo ?? { errors: [] }));
+    });
+    await new Promise<void>((r) => servidor.listen(0, "127.0.0.1", r));
+    process.env.ASAAS_API_KEY = "chave-teste";
+    process.env.ASAAS_BASE_URL = `http://127.0.0.1:${(servidor.address() as { port: number }).port}/v3`;
+    try {
+      const r = await sincronizarAsaas(db, { classificar: false });
+      expect(r).toMatchObject({ cobrancas: 3, notas: 1, clientesNovos: 2, lancamentosNovos: 2, conciliados: 1, saldoCentavos: 234_567 });
+      expect(pedidos.some((p) => p.startsWith("/v3/payments?") && p.includes("limit=100"))).toBe(true);
+
+      const ok = await db.query.compromissos.findFirst({ where: (c, { eq }) => eq(c.idExterno, "pay_ok") });
+      expect(ok).toMatchObject({ status: "pago", valorCentavos: 150_000 });
+      expect(ok?.transacaoId).not.toBeNull();
+      const taxa = await db.query.transacoes.findFirst({ where: (t, { eq }) => eq(t.idExterno, "ft_2") });
+      expect(taxa).toMatchObject({ categoriaId: "pj_taxas_pagamento", escopo: "PJ", classificadoPor: "heuristica", valorCentavos: -199 });
+
+      // Rodar de novo não duplica nada.
+      const r2 = await sincronizarAsaas(db, { classificar: false });
+      expect(r2.lancamentosNovos).toBe(0);
+      expect(await db.$count(schema.compromissos)).toBe(3);
+
+      const rec = await resumoRecebiveis(db);
+      expect(rec).toMatchObject({ aReceber30dCentavos: 80_000, vencidoCentavos: 30_000, vencidoQtd: 1 });
+      expect(rec.maiorCliente?.nome).toBe("Cliente Um Ltda");
+
+      await salvarPerfilFiscal(db, { proLaboreMensalCentavos: 450_000, sujeitoFatorR: true, custoFixoPjCentavos: 700_000, emailResumo: "" });
+      const ind = await indicadoresFiscais(db);
+      expect(ind.fonte).toBe("notas");
+      expect(ind.diagnostico.rbt12Centavos).toBe(150_000);
+      expect(ind.diagnostico.anexo).toBe("III");
+    } finally {
+      delete process.env.ASAAS_API_KEY;
+      delete process.env.ASAAS_BASE_URL;
       servidor.closeAllConnections();
       servidor.close();
     }

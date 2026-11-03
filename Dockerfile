@@ -30,6 +30,9 @@ RUN addgroup -S app && adduser -S app -G app
 COPY --from=build --chown=app:app /app/.next/standalone ./
 COPY --from=build --chown=app:app /app/.next/static ./.next/static
 COPY --from=build --chown=app:app /app/public ./public
+# Manual e changelog exibidos em /ajuda.
+COPY --chown=app:app docs ./docs
+COPY --chown=app:app CHANGELOG.md ./
 USER app
 EXPOSE 3000
 CMD ["node", "server.js"]

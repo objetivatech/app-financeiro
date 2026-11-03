@@ -51,3 +51,20 @@ body {
 .numero {
   font-variant-numeric: tabular-nums;
 }
+
+/* Manual e changelog renderizados em /ajuda */
+.manual h1 { font-size: 1.5rem; font-weight: 600; margin: 2rem 0 0.75rem; }
+.manual h2 { font-size: 1.2rem; font-weight: 600; margin: 2rem 0 0.5rem; padding-top: 1rem; border-top: 1px solid var(--borda); }
+.manual h3 { font-size: 1rem; font-weight: 600; margin: 1.25rem 0 0.4rem; }
+.manual p, .manual li { font-size: 0.925rem; line-height: 1.6; }
+.manual p { margin: 0.5rem 0; }
+.manual ul, .manual ol { margin: 0.5rem 0 0.5rem 1.25rem; }
+.manual ul { list-style: disc; }
+.manual ol { list-style: decimal; }
+.manual code { font-family: var(--font-mono); font-size: 0.85em; background: color-mix(in srgb, var(--foreground) 6%, transparent); padding: 0.1em 0.3em; border-radius: 4px; }
+.manual pre { background: color-mix(in srgb, var(--foreground) 6%, transparent); padding: 0.75rem; border-radius: 6px; overflow-x: auto; margin: 0.75rem 0; }
+.manual pre code { background: none; padding: 0; }
+.manual table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.875rem; }
+.manual th, .manual td { border-bottom: 1px solid var(--borda); padding: 0.35rem 0.5rem; text-align: left; vertical-align: top; }
+.manual a { text-decoration: underline; }
+.manual blockquote { border-left: 3px solid var(--alerta); padding-left: 0.75rem; color: var(--suave); margin: 0.75rem 0; }

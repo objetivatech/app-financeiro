@@ -11,3 +11,6 @@ App de finanças pessoais + empresa (piloto de uso pessoal). Leia `docs/ARQUITET
 - Não enviar CPF/CNPJ à IA fora da leitura de documentos.
 - Verificação: `pnpm test`, `pnpm typecheck`, `pnpm lint`. Teste com banco: `TEST_DATABASE_URL=… pnpm test`.
 - Migrações: altere `src/lib/db/schema.ts` e rode `pnpm db:gerar`; nunca edite SQL já aplicado.
+- Toda mudança visível ao usuário atualiza `CHANGELOG.md` (seção da próxima versão) e, se mudar o uso, `docs/MANUAL.md`
+  (o manual aparece em /ajuda; mantenha as âncoras `<a id="...">` usadas pelos links "?" das telas).
+- Integrações são somente leitura: nunca criar cobranças nem movimentar dinheiro em serviços externos.

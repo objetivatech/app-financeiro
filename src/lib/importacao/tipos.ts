@@ -5,7 +5,9 @@
  * Em cartão de crédito: compra = negativo, pagamento/estorno = positivo.
  */
 
-export type FormatoArquivo = "ofx" | "csv" | "pdf" | "imagem" | "desconhecido";
+import type { Natureza } from "../naturezas";
+
+export type FormatoArquivo = "ofx" | "csv" | "pdf" | "imagem" | "api" | "desconhecido";
 
 export type TipoConta = "corrente" | "pagamento" | "poupanca" | "cartao_credito" | "investimento";
 
@@ -25,6 +27,13 @@ export interface TransacaoExtraida {
   nomeContraparte?: string;
   /** Parcela "3/10" em compras parceladas de cartão. */
   parcela?: { atual: number; total: number };
+  /** Classificação já conhecida pela origem (integrações), gravada como heurística. */
+  sugestao?: {
+    escopo?: Escopo;
+    categoriaId?: string;
+    natureza?: Natureza;
+    motivo: string;
+  };
 }
 
 export interface ContaExtraida {

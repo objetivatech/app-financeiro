@@ -1,6 +1,6 @@
 {
   "name": "app-financeiro",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -16,6 +16,7 @@
     "@anthropic-ai/sdk": "^0.135.0",
     "drizzle-orm": "^0.45.4",
     "iconv-lite": "^0.7.3",
+    "marked": "^16.4.2",
     "next": "16.4.2",
     "papaparse": "^5.7.0",
     "pg": "^8.23.1",

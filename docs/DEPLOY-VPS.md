@@ -26,6 +26,7 @@ Nenhum desses dados existe pronto em algum lugar: você cria cada um. O arquivo 
 | `POSTGRES_PASSWORD` | Senha do banco de dados. Só o app usa; você não vai digitá-la no dia a dia. | Invente, ou gere na VPS com `openssl rand -base64 24` e cole o resultado. |
 | `ANTHROPIC_API_KEY` | Chave para o app usar a IA (Claude). | Crie uma conta em [console.anthropic.com](https://console.anthropic.com), adicione créditos em *Billing* e gere a chave em *Settings → API Keys* (começa com `sk-ant-`). É uma cobrança separada da assinatura do Claude.ai. Defina um limite mensal de gasto em *Limits*. |
 | `APP_USUARIO` / `APP_SENHA` | Login e senha que o navegador vai pedir ao abrir o app. | Você escolhe. Use uma senha forte e diferente das outras. |
+| `ASAAS_API_KEY` | Chave da API do Asaas (leitura de cobranças, notas e extrato). | No Asaas: *Minha conta → Integrações → Chave de API*. Coloque entre aspas simples: `ASAAS_API_KEY='$aact_...'` (a chave começa com `$`). Opcional; sem ela a integração fica desligada. |
 | `CLOUDFLARE_TUNNEL_TOKEN` | Liga a VPS à Cloudflare sem abrir portas. | Gerado no passo 3, ao criar o túnel. Pode deixar vazio por enquanto. |
 
 Sem a `ANTHROPIC_API_KEY` o app funciona com OFX e CSV, mas não lê PDF/fotos nem gera dicas.
@@ -73,6 +74,10 @@ Guarde a senha do backup fora da VPS (gerenciador de senhas). Copie os backups p
 ## Atualizar
 
 ```bash
+cd ~/app-financeiro
 git pull
 docker compose up -d --build
 ```
+
+As migrações do banco rodam sozinhas (serviço `migrar`) antes de o app subir. Veja o que mudou em `CHANGELOG.md`
+ou em **Ajuda → Novidades** no app.

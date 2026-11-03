@@ -57,6 +57,32 @@ Ordem de prioridade (uma etapa nunca sobrescreve outra de prioridade maior):
 Depois, `marcarMistura` sinaliza gasto PF em conta PJ (e vice-versa). Transferências PJ→PF viram `retirada_socio`
 para você definir se foi pró-labore ou distribuição de lucros (o tratamento tributário é diferente).
 
+## Integrações (`src/lib/integracoes`)
+
+Somente leitura. Cada integração grava o estado em `integracoes` (status, última sincronização, até onde o
+extrato já foi trazido) e roda sozinha pelo agendador em `src/instrumentation.ts` (a cada 6 h).
+
+**Asaas** (`integracoes/asaas`): cliente HTTP da API v3 (`access_token` no cabeçalho, paginação de 100 em 100,
+nova tentativa em 429/5xx) e sincronização em quatro passos:
+
+1. Saldo (`/finance/balance`).
+2. Cobranças (`/payments`) → `compromissos` (tipo *receber*, escopo PJ), com cliente (`/customers/{id}` → `clientes`).
+3. Notas fiscais (`/invoices`) → `notas_fiscais` (receita bruta para o Simples).
+4. Extrato (`/financialTransactions`, dias completos até ontem) → `transacoes` da conta "Asaas · PJ", pelo mesmo
+   `gravarExtrato` usado pelos arquivos. Tipos conhecidos (recebimento, taxas, fatura do cartão Asaas) já chegam
+   classificados; recebimentos são conciliados com a cobrança (`compromissos.transacao_id`).
+
+Na primeira sincronização: 13 meses de cobranças e notas; o extrato começa depois do último lançamento já
+importado por arquivo nessa conta, para não duplicar.
+
+## Compromissos e fiscal
+
+- `compromissos`: o que vai entrar ou sair (hoje, cobranças do Asaas; depois, recorrências, dívidas e lançamentos
+  manuais). Status `aberto`, `vencido`, `pago`, `cancelado`.
+- `src/lib/fiscal/simples.ts`: tabelas dos Anexos III e V, alíquota efetiva, Fator R e diagnóstico (pró-labore
+  mínimo, receita máxima). `fiscal/indicadores.ts`: receita mensal (notas autorizadas, ou recebimentos), RBT12 e
+  indicadores de contas a receber.
+
 ## Painel e análise
 
 `src/lib/consultas.ts` calcula os totais em SQL. Movimentações entre bolsos (transferências, faturas, investimentos,

@@ -4,9 +4,11 @@ import { Botao, Cartao, Carregando, estiloCampo, SeloEscopo } from "@/components
 import { CATEGORIAS_PADRAO } from "@/lib/classificacao/categorias";
 import { obterPerfil } from "@/lib/classificacao/executar";
 import { obterDb } from "@/lib/db";
-import { ROTULOS_NATUREZA } from "@/lib/formato";
+import { formatarMoeda, ROTULOS_NATUREZA } from "@/lib/formato";
 import { iaDisponivel, MODELO_IA } from "@/lib/ia/cliente";
-import { excluirRegra, salvarPerfil } from "./acoes";
+import { LinkAjuda } from "@/components/link-ajuda";
+import { obterPerfilFiscal } from "@/lib/fiscal/perfil";
+import { excluirRegra, salvarDadosFiscais, salvarPerfil } from "./acoes";
 
 const EXEMPLO_PERFIL = `Ex.: Sou sócio único de uma agência de marketing digital (Simples Nacional, Anexo III).
 Faturamento médio de R$ 40 mil/mês. Tiro pró-labore de R$ 3.000 todo dia 5 e distribuo lucros quando sobra.
@@ -27,14 +29,41 @@ export default function PaginaConfiguracoes() {
 async function Conteudo() {
   await connection();
   const db = obterDb();
-  const [perfil, listaRegras] = await Promise.all([
+  const [perfil, listaRegras, fiscal] = await Promise.all([
     obterPerfil(db),
     db.query.regras.findMany({ orderBy: (r, { desc }) => [desc(r.id)] }),
+    obterPerfilFiscal(db),
   ]);
   const nomeCategoria = new Map(CATEGORIAS_PADRAO.map((c) => [c.id, c.nome]));
 
   return (
     <>
+      <Cartao titulo={<>Dados financeiros e fiscais <LinkAjuda secao="configuracoes" /></>}>
+        <form action={salvarDadosFiscais} className="grid gap-3 text-sm md:grid-cols-2">
+          <label className="grid gap-1">
+            <span className="text-suave">Pró-labore mensal</span>
+            <input name="proLabore" defaultValue={fiscal.proLaboreMensalCentavos ? formatarMoeda(fiscal.proLaboreMensalCentavos) : ""} placeholder="R$ 4.500,00" className={estiloCampo} />
+            <span className="text-xs text-suave">Base do INSS (11%) e da folha usada no Fator R.</span>
+          </label>
+          <label className="grid gap-1">
+            <span className="text-suave">Custo fixo mensal da empresa (com o pró-labore)</span>
+            <input name="custoFixo" defaultValue={fiscal.custoFixoPjCentavos ? formatarMoeda(fiscal.custoFixoPjCentavos) : ""} placeholder="R$ 7.000,00" className={estiloCampo} />
+            <span className="text-xs text-suave">Base da meta de reserva de caixa da empresa.</span>
+          </label>
+          <label className="grid gap-1">
+            <span className="text-suave">E-mail para os resumos</span>
+            <input name="emailResumo" type="email" defaultValue={fiscal.emailResumo} placeholder="voce@empresa.com.br" className={estiloCampo} />
+          </label>
+          <label className="flex items-center gap-2 self-center">
+            <input type="checkbox" name="sujeitoFatorR" defaultChecked={fiscal.sujeitoFatorR} />
+            Minha atividade principal está sujeita ao Fator R (Anexo III ou V)
+          </label>
+          <div className="md:col-span-2">
+            <Botao type="submit">Salvar</Botao>
+          </div>
+        </form>
+      </Cartao>
+
       <Cartao titulo="Sobre você e sua empresa">
         <form action={salvarPerfil} className="space-y-3">
           <p className="text-sm text-suave">

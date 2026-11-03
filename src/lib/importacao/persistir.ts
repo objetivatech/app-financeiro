@@ -128,8 +128,42 @@ export async function importarParaBanco(
     contaNova = (await db.$count(contas)) > antes;
   }
 
+  const gravado = await gravarExtrato(db, extrato, { contaId: conta.id, nomeArquivo, hashArquivo: hash });
+  const { novas, duplicadas } = gravado;
+  return {
+    importacaoId: gravado.importacaoId,
+    contaId: conta.id,
+    contaApelido: conta.apelido,
+    contaNova,
+    instituicaoReconhecida: Boolean(extrato.instituicaoId),
+    novas,
+    duplicadas,
+    avisos: extrato.avisos,
+    extraidoPor: extrato.extraidoPor,
+  };
+}
+
+export interface ResultadoGravacao {
+  importacaoId: number;
+  novas: number;
+  duplicadas: number;
+  /** Para cada transação nova: posição dela em `extrato.transacoes` e o id gravado. */
+  inseridas: { indice: number; id: number }[];
+}
+
+/**
+ * Grava um extrato já lido numa conta: registra a importação e insere as transações,
+ * ignorando as que já existem (mesma chave de deduplicação). Usado por arquivos e por integrações.
+ */
+export async function gravarExtrato(
+  db: Db,
+  extrato: ExtratoNormalizado,
+  destino: { contaId: number; nomeArquivo: string; hashArquivo: string },
+): Promise<ResultadoGravacao> {
+  if (extrato.formato === "desconhecido") throw new ErroImportacao("Formato não suportado.");
   const hashes = calcularHashesDedup(extrato);
-  const contaId = conta.id;
+  const indicePorHash = new Map(hashes.map((h, i) => [h, i]));
+  const { contaId, nomeArquivo } = destino;
   const formato = extrato.formato;
 
   return db.transaction(async (tx) => {
@@ -138,7 +172,7 @@ export async function importarParaBanco(
       .values({
         contaId,
         nomeArquivo,
-        hashArquivo: hash,
+        hashArquivo: destino.hashArquivo,
         formato,
         extraidoPor: extrato.extraidoPor,
         periodoInicio: extrato.periodo?.inicio ?? null,
@@ -161,33 +195,35 @@ export async function importarParaBanco(
       documentoContraparte: t.documentoContraparte ?? null,
       parcelaAtual: t.parcela?.atual ?? null,
       parcelaTotal: t.parcela?.total ?? null,
+      // Classificação já conhecida pela origem (ex.: tipo de lançamento do Asaas).
+      ...(t.sugestao
+        ? {
+            escopo: t.sugestao.escopo ?? null,
+            categoriaId: t.sugestao.categoriaId ?? null,
+            natureza: t.sugestao.natureza ?? "comum",
+            classificadoPor: "heuristica" as const,
+            motivo: t.sugestao.motivo,
+            confianca: 1,
+          }
+        : {}),
     }));
 
-    let novas = 0;
+    const inseridas: { indice: number; id: number }[] = [];
     for (let i = 0; i < linhas.length; i += 500) {
-      const inseridas = await tx
+      const lote = await tx
         .insert(transacoes)
         .values(linhas.slice(i, i + 500))
         .onConflictDoNothing({ target: [transacoes.contaId, transacoes.hashDedup] })
-        .returning({ id: transacoes.id });
-      novas += inseridas.length;
+        .returning({ id: transacoes.id, hashDedup: transacoes.hashDedup });
+      for (const r of lote) inseridas.push({ indice: indicePorHash.get(r.hashDedup)!, id: r.id });
     }
+    const novas = inseridas.length;
     const duplicadas = linhas.length - novas;
     await tx
       .update(importacoes)
       .set({ qtdNovas: novas, qtdDuplicadas: duplicadas })
       .where(eq(importacoes.id, importacao.id));
 
-    return {
-      importacaoId: importacao.id,
-      contaId,
-      contaApelido: conta.apelido,
-      contaNova,
-      instituicaoReconhecida: Boolean(extrato.instituicaoId),
-      novas,
-      duplicadas,
-      avisos: extrato.avisos,
-      extraidoPor: extrato.extraidoPor,
-    };
+    return { importacaoId: importacao.id, novas, duplicadas, inseridas };
   });
 }

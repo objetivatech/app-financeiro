@@ -24,7 +24,7 @@ export function BarrasMensais({
 
   return (
     <figure>
-      <figcaption className="mb-2 text-sm text-suave">{titulo}</figcaption>
+      {titulo && <figcaption className="mb-2 text-sm text-suave">{titulo}</figcaption>}
       <div className="relative flex items-stretch gap-1.5" style={{ height: altura }}>
         <div className="pointer-events-none absolute inset-x-0 border-t border-borda" style={{ top: base }} />
         {dados.map((d) => {

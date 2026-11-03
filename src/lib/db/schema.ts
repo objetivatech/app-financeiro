@@ -24,7 +24,8 @@ export const escopoEnum = pgEnum("escopo", ["PF", "PJ"]);
 /** Escopo padrão de uma conta: "misto" quando a mesma conta é usada para PF e PJ. */
 export const escopoContaEnum = pgEnum("escopo_conta", ["PF", "PJ", "misto"]);
 export const tipoContaEnum = pgEnum("tipo_conta", ["corrente", "pagamento", "poupanca", "cartao_credito", "investimento"]);
-export const formatoEnum = pgEnum("formato_arquivo", ["ofx", "csv", "pdf", "imagem"]);
+/** "api" = dados que vieram de integração (ex.: extrato do Asaas), não de arquivo. */
+export const formatoEnum = pgEnum("formato_arquivo", ["ofx", "csv", "pdf", "imagem", "api"]);
 export const origemClassificacaoEnum = pgEnum("origem_classificacao", ["conta", "regra", "heuristica", "transferencia", "ia", "usuario"]);
 
 export { NATUREZAS, type Natureza };
@@ -186,3 +187,102 @@ export const trabalhosImportacao = pgTable("trabalhos_importacao", {
 });
 
 export type TrabalhoImportacao = typeof trabalhosImportacao.$inferSelect;
+
+/** Integrações com serviços externos (Asaas, Mercado Pago...): estado da última sincronização. */
+export const integracoes = pgTable("integracoes", {
+  /** Identificador fixo: "asaas", "mercadopago". */
+  id: text("id").primaryKey(),
+  status: text("status").notNull().default("nunca"),
+  mensagem: text("mensagem"),
+  ultimaSincronizacao: timestamp("ultima_sincronizacao", { withTimezone: true }),
+  /** Último dia do extrato já trazido (o próximo começa no dia seguinte). */
+  extratoAte: date("extrato_ate"),
+  contaId: integer("conta_id").references(() => contas.id, { onDelete: "set null" }),
+  /** Dados livres da integração: saldo atual, totais da última sincronização etc. */
+  dados: jsonb("dados").$type<Record<string, unknown>>().notNull().default({}),
+});
+
+/** Clientes (de quem a empresa recebe), vindos das integrações. */
+export const clientes = pgTable(
+  "clientes",
+  {
+    id: serial("id").primaryKey(),
+    origem: text("origem").notNull(),
+    idExterno: text("id_externo").notNull(),
+    nome: text("nome").notNull(),
+    documento: text("documento"),
+    email: text("email"),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("clientes_origem_idx").on(t.origem, t.idExterno)],
+);
+
+export const tipoCompromissoEnum = pgEnum("tipo_compromisso", ["receber", "pagar"]);
+export const statusCompromissoEnum = pgEnum("status_compromisso", ["aberto", "vencido", "pago", "cancelado"]);
+
+/**
+ * Compromissos: o que vai entrar ou sair (contas a receber e a pagar).
+ * Vêm de integrações (cobranças do Asaas), de recorrências ou de lançamento manual.
+ * Quando o dinheiro aparece no extrato, `transacaoId` liga o previsto ao realizado (conciliação).
+ */
+export const compromissos = pgTable(
+  "compromissos",
+  {
+    id: serial("id").primaryKey(),
+    tipo: tipoCompromissoEnum("tipo").notNull(),
+    escopo: escopoEnum("escopo").notNull(),
+    descricao: text("descricao").notNull(),
+    clienteId: integer("cliente_id").references(() => clientes.id, { onDelete: "set null" }),
+    /** Sempre positivo; o tipo diz se entra ou sai. */
+    valorCentavos: bigint("valor_centavos", { mode: "number" }).notNull(),
+    /** Valor líquido (já descontadas as taxas), quando a origem informa. */
+    valorLiquidoCentavos: bigint("valor_liquido_centavos", { mode: "number" }),
+    vencimento: date("vencimento").notNull(),
+    status: statusCompromissoEnum("status").notNull().default("aberto"),
+    dataPagamento: date("data_pagamento"),
+    /** Quando o dinheiro fica disponível na conta (cartão de crédito demora). */
+    dataCredito: date("data_credito"),
+    formaPagamento: text("forma_pagamento"),
+    categoriaId: text("categoria_id").references(() => categorias.id),
+    contaId: integer("conta_id").references(() => contas.id, { onDelete: "set null" }),
+    transacaoId: integer("transacao_id").references(() => transacoes.id, { onDelete: "set null" }),
+    origem: text("origem").notNull(),
+    idExterno: text("id_externo"),
+    /** Status exatamente como a origem informou (ex.: RECEIVED, OVERDUE). */
+    statusOriginal: text("status_original"),
+    link: text("link"),
+    parcelaAtual: integer("parcela_atual"),
+    parcelaTotal: integer("parcela_total"),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+    atualizadoEm: timestamp("atualizado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("compromissos_origem_idx").on(t.origem, t.idExterno),
+    index("compromissos_vencimento_idx").on(t.vencimento),
+  ],
+);
+
+/** Notas fiscais emitidas (receita bruta para o Simples e o Fator R). */
+export const notasFiscais = pgTable(
+  "notas_fiscais",
+  {
+    id: serial("id").primaryKey(),
+    origem: text("origem").notNull(),
+    idExterno: text("id_externo").notNull(),
+    compromissoId: integer("compromisso_id").references(() => compromissos.id, { onDelete: "set null" }),
+    clienteId: integer("cliente_id").references(() => clientes.id, { onDelete: "set null" }),
+    numero: text("numero"),
+    /** Status da origem: SCHEDULED, AUTHORIZED, CANCELED... */
+    status: text("status").notNull(),
+    valorCentavos: bigint("valor_centavos", { mode: "number" }).notNull(),
+    dataEmissao: date("data_emissao").notNull(),
+    codigoServico: text("codigo_servico"),
+    descricaoServico: text("descricao_servico"),
+    pdfUrl: text("pdf_url"),
+    atualizadoEm: timestamp("atualizado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("notas_origem_idx").on(t.origem, t.idExterno), index("notas_emissao_idx").on(t.dataEmissao)],
+);
+
+export type Compromisso = typeof compromissos.$inferSelect;
+export type Cliente = typeof clientes.$inferSelect;
