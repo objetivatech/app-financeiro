@@ -217,6 +217,58 @@ export const clientes = pgTable(
   (t) => [uniqueIndex("clientes_origem_idx").on(t.origem, t.idExterno)],
 );
 
+export const tipoDividaEnum = pgEnum("tipo_divida", [
+  "acordo_judicial",
+  "emprestimo",
+  "parcelamento_imposto",
+  "financiamento",
+  "compra_parcelada",
+  "outro",
+]);
+
+/**
+ * Dívidas com parcelas (acordos, empréstimos, parcelamentos). As parcelas viram `compromissos`
+ * do tipo "pagar"; a dívida guarda os dados para custo efetivo e estratégia de quitação.
+ */
+export const dividas = pgTable("dividas", {
+  id: serial("id").primaryKey(),
+  nome: text("nome").notNull(),
+  credor: text("credor"),
+  tipo: tipoDividaEnum("tipo").notNull().default("outro"),
+  escopo: escopoEnum("escopo").notNull(),
+  /** Quanto você recebeu de fato (para calcular o custo da dívida). Opcional. */
+  valorRecebidoCentavos: bigint("valor_recebido_centavos", { mode: "number" }),
+  /** Atraso que causa perda do acordo/benefício (ex.: 30 dias no acordo judicial). Null = sem regra. */
+  diasTolerancia: integer("dias_tolerancia"),
+  /** O que acontece se passar da tolerância (mostrado no alerta). */
+  consequenciaAtraso: text("consequencia_atraso"),
+  /** Lembrete depois de pagar (ex.: enviar comprovante por e-mail em 2 dias úteis). */
+  lembreteAposPagar: text("lembrete_apos_pagar"),
+  contaId: integer("conta_id").references(() => contas.id, { onDelete: "set null" }),
+  observacao: text("observacao"),
+  ativa: boolean("ativa").notNull().default(true),
+  criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Contas fixas que se repetem todo mês (pró-labore, DAS, contabilidade, aluguel...). */
+export const recorrencias = pgTable("recorrencias", {
+  id: serial("id").primaryKey(),
+  descricao: text("descricao").notNull(),
+  tipo: text("tipo").notNull().default("pagar"),
+  escopo: escopoEnum("escopo").notNull(),
+  /** Valor estimado; o real vem do extrato na conciliação. */
+  valorCentavos: bigint("valor_centavos", { mode: "number" }).notNull(),
+  diaVencimento: integer("dia_vencimento").notNull(),
+  categoriaId: text("categoria_id").references(() => categorias.id),
+  contaId: integer("conta_id").references(() => contas.id, { onDelete: "set null" }),
+  /** Trecho da descrição no extrato que identifica o pagamento (ajuda a conciliar). */
+  padraoExtrato: text("padrao_extrato"),
+  inicio: date("inicio").notNull(),
+  fim: date("fim"),
+  ativa: boolean("ativa").notNull().default(true),
+  criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const tipoCompromissoEnum = pgEnum("tipo_compromisso", ["receber", "pagar"]);
 export const statusCompromissoEnum = pgEnum("status_compromisso", ["aberto", "vencido", "pago", "cancelado"]);
 
@@ -253,6 +305,11 @@ export const compromissos = pgTable(
     link: text("link"),
     parcelaAtual: integer("parcela_atual"),
     parcelaTotal: integer("parcela_total"),
+    dividaId: integer("divida_id").references(() => dividas.id, { onDelete: "cascade" }),
+    recorrenciaId: integer("recorrencia_id").references(() => recorrencias.id, { onDelete: "cascade" }),
+    /** Quando o lembrete pós-pagamento (ex.: enviar comprovante) foi cumprido. */
+    lembreteCumpridoEm: timestamp("lembrete_cumprido_em", { withTimezone: true }),
+    observacao: text("observacao"),
     criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
     atualizadoEm: timestamp("atualizado_em", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -285,6 +342,8 @@ export const notasFiscais = pgTable(
 );
 
 export type Compromisso = typeof compromissos.$inferSelect;
+export type Divida = typeof dividas.$inferSelect;
+export type Recorrencia = typeof recorrencias.$inferSelect;
 export type Cliente = typeof clientes.$inferSelect;
 
 /** Consumo da IA por chamada, para acompanhar o custo (Configurações → Inteligência artificial). */

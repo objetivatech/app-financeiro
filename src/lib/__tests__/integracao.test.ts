@@ -14,6 +14,9 @@ import { CATEGORIAS_PADRAO } from "../classificacao/categorias";
 import { classificarPendentes, reabrirClassificacaoDaConta } from "../classificacao/executar";
 import type { Db } from "../db";
 import * as schema from "../db/schema";
+import { parcelasFixas } from "../compromissos/calculo";
+import { atualizarCompromissos, contasAPagar, criarDivida, criarRecorrencia, fluxoProjetado, lembretesPendentes, marcarPago, resumoDividas } from "../compromissos/servico";
+import { hojeBrasil, somarDias } from "../datas";
 import { indicadoresFiscais, resumoRecebiveis } from "../fiscal/indicadores";
 import { salvarPerfilFiscal } from "../fiscal/perfil";
 import { sincronizarAsaas } from "../integracoes/asaas/sincronizar";
@@ -31,7 +34,7 @@ describe.skipIf(!url)("importação + classificação no banco", () => {
     pool = new Pool({ connectionString: url });
     db = drizzle(pool, { schema });
     await migrate(db, { migrationsFolder: "drizzle" });
-    await db.execute(sql`truncate notas_fiscais, compromissos, clientes, integracoes, trabalhos_importacao, transacoes, importacoes, regras, contas, titulares, categorias, configuracoes restart identity cascade`);
+    await db.execute(sql`truncate notas_fiscais, compromissos, dividas, recorrencias, uso_ia, clientes, integracoes, trabalhos_importacao, transacoes, importacoes, regras, contas, titulares, categorias, configuracoes restart identity cascade`);
     await db.insert(schema.categorias).values(CATEGORIAS_PADRAO);
   });
 
@@ -214,5 +217,80 @@ describe.skipIf(!url)("importação + classificação no banco", () => {
       servidor.closeAllConnections();
       servidor.close();
     }
+  });
+
+  it("dívidas e contas fixas: parcelas, alerta de atraso, conciliação com o extrato e fluxo de caixa", async () => {
+    const hoje = hojeBrasil();
+    const nubank = (await db.query.contas.findFirst({ where: (c, { eq }) => eq(c.instituicaoId, "nubank") }))!;
+
+    // Acordo com tolerância de 30 dias: 1ª parcela venceu há 10 dias e não foi paga.
+    const acordo = await criarDivida(db, {
+      nome: "Acordo judicial",
+      tipo: "acordo_judicial",
+      escopo: "PF",
+      diasTolerancia: 30,
+      consequenciaAtraso: "O acordo é cancelado",
+      lembreteAposPagar: "Enviar comprovante ao escritório em 2 dias úteis",
+      parcelas: parcelasFixas(somarDias(hoje, -10), 53, 63_750),
+    });
+    // Empréstimo: recebeu R$ 595, paga 3× de R$ 300 (a 1ª já paga).
+    await criarDivida(db, {
+      nome: "Empréstimo MP",
+      tipo: "emprestimo",
+      escopo: "PF",
+      valorRecebidoCentavos: 59_500,
+      parcelas: parcelasFixas(somarDias(hoje, -30), 3, 30_000),
+      parcelasJaPagas: 1,
+    });
+    await criarRecorrencia(db, {
+      descricao: "Contabilidade",
+      tipo: "pagar",
+      escopo: "PJ",
+      valorCentavos: 45_000,
+      diaVencimento: 10,
+      padraoExtrato: "contabil",
+      inicio: somarDias(hoje, -40),
+    });
+
+    let dividasResumo = await resumoDividas(db);
+    const a = dividasResumo.find((d) => d.id === acordo)!;
+    expect(a).toMatchObject({ parcelasTotal: 53, parcelasPagas: 0, diasAtraso: 10, diasTolerancia: 30 });
+    const mp = dividasResumo.find((d) => d.nome === "Empréstimo MP")!;
+    expect(mp).toMatchObject({ parcelasPagas: 1, restanteCentavos: 60_000 });
+    expect(mp.taxaMensal).toBeGreaterThan(0.2);
+
+    const { pendentes } = await contasAPagar(db, 30);
+    expect(pendentes.some((p) => p.status === "vencido" && p.descricao.startsWith("Acordo judicial (1/53)"))).toBe(true);
+    expect(pendentes.some((p) => p.descricao === "Contabilidade")).toBe(true);
+
+    // O pagamento aparece no extrato do Nubank 2 dias depois do vencimento: concilia sozinho.
+    const vencAcordo = somarDias(hoje, -10);
+    await db.insert(schema.transacoes).values({
+      contaId: nubank.id,
+      data: somarDias(vencAcordo, 2),
+      descricao: "PIX ENVIADO PORTO SEGURO",
+      descricaoNormalizada: "PIX ENVIADO PORTO SEGURO",
+      valorCentavos: -63_750,
+      hashDedup: "teste-acordo",
+    });
+    const r = await atualizarCompromissos(db);
+    expect(r.conciliados).toBeGreaterThanOrEqual(1);
+    dividasResumo = await resumoDividas(db);
+    expect(dividasResumo.find((d) => d.id === acordo)).toMatchObject({ parcelasPagas: 1, diasAtraso: 0 });
+    const lembretes = await lembretesPendentes(db);
+    expect(lembretes.map((l) => l.descricao)).toContain("Acordo judicial (1/53)");
+    const transacao = await db.query.transacoes.findFirst({ where: (t, { eq }) => eq(t.hashDedup, "teste-acordo") });
+    expect(transacao).toMatchObject({ categoriaId: "pf_dividas", classificadoPor: "regra" });
+
+    // Marcar manualmente como pago.
+    const contab = (await contasAPagar(db, 30)).pendentes.find((p) => p.descricao === "Contabilidade")!;
+    await marcarPago(db, contab.id, hoje);
+    expect((await contasAPagar(db, 30)).pagasRecentes.some((p) => p.id === contab.id)).toBe(true);
+
+    const fluxo = await fluxoProjetado(db, 13);
+    expect(fluxo.semanas).toHaveLength(13);
+    const saidasPF = fluxo.semanas.reduce((s, w) => s + w.PF.saidas, 0);
+    expect(saidasPF).toBeGreaterThan(0);
+    expect(fluxo.semanas.at(-1)!.PF.saldo).toBe(fluxo.saldoInicial.PF + fluxo.semanas.reduce((s, w) => s + w.PF.entradas - w.PF.saidas, 0));
   });
 });

@@ -23,11 +23,10 @@
 
 ## Próximo (fase 2 — gestão)
 
-- [ ] **Dívidas e compromissos a pagar:** acordo judicial (parcelas mensais, alerta de atraso e lembrete de enviar
-      o comprovante), parcelamentos do MEI, empréstimos (Mercado Pago, Shopee), cartões (limite, fechamento,
-      vencimento); estratégia de quitação
-- [ ] **Recorrências:** pró-labore, DAS, INSS, contabilidade, contas da casa → previstos do mês, conciliados com o extrato
-- [ ] **Fluxo de caixa projetado** (90 dias, PF e PJ)
+- [x] **Dívidas e compromissos a pagar** (v0.5.0): alerta de atraso, lembrete pós-pagamento, juros, ordem de quitação
+- [x] **Recorrências** (v0.5.0): previstos do mês, conciliados com o extrato
+- [x] **Fluxo de caixa projetado** (v0.5.0): 13 semanas, PF e PJ
+- [ ] **Cartões de crédito:** limite, fechamento e vencimento; faturas futuras a partir das parcelas
 - [ ] **Lançamento rápido** no navegador
 - [ ] Integração com o **Mercado Pago**
 

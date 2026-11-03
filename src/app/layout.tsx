@@ -16,6 +16,8 @@ const LINKS = [
   { href: "/", rotulo: "Painel" },
   { href: "/transacoes", rotulo: "Transações" },
   { href: "/receber", rotulo: "A receber" },
+  { href: "/pagar", rotulo: "A pagar" },
+  { href: "/fluxo", rotulo: "Fluxo" },
   { href: "/impostos", rotulo: "Impostos" },
   { href: "/importar", rotulo: "Importar" },
   { href: "/contas", rotulo: "Contas" },

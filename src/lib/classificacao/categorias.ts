@@ -25,6 +25,7 @@ export const CATEGORIAS_PADRAO: CategoriaPadrao[] = [
   { id: "pf_familia", nome: "Família, pets e presentes", escopo: "PF", grupo: "despesa" },
   { id: "pf_juros_tarifas", nome: "Juros, IOF e tarifas pessoais", escopo: "PF", grupo: "despesa" },
   { id: "pf_impostos", nome: "Impostos pessoais (IR, IPVA, IPTU)", escopo: "PF", grupo: "despesa" },
+  { id: "pf_dividas", nome: "Parcelas de dívidas, empréstimos e acordos", escopo: "PF", grupo: "despesa" },
   { id: "pf_outros", nome: "Outras despesas pessoais", escopo: "PF", grupo: "despesa" },
   // Pessoa jurídica
   { id: "pj_receita", nome: "Receita de vendas e serviços", escopo: "PJ", grupo: "receita" },
@@ -39,6 +40,7 @@ export const CATEGORIAS_PADRAO: CategoriaPadrao[] = [
   { id: "pj_taxas_pagamento", nome: "Taxas de meios de pagamento", escopo: "PJ", grupo: "despesa" },
   { id: "pj_tarifas", nome: "Tarifas bancárias e juros da empresa", escopo: "PJ", grupo: "despesa" },
   { id: "pj_equipamentos", nome: "Equipamentos", escopo: "PJ", grupo: "despesa" },
+  { id: "pj_dividas", nome: "Parcelas de dívidas e parcelamentos de impostos", escopo: "PJ", grupo: "despesa" },
   { id: "pj_outros", nome: "Outras despesas da empresa", escopo: "PJ", grupo: "despesa" },
   // Movimentações (não são receita nem despesa de verdade)
   { id: "mov_transferencia", nome: "Transferência entre contas próprias", escopo: null, grupo: "movimentacao" },
