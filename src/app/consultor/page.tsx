@@ -1,3 +1,4 @@
+import { BotaoEnviar, Formulario } from "@/components/formulario";
 import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
@@ -60,12 +61,12 @@ async function Conteudo({ searchParams }: { searchParams: Busca }) {
                   <Link href={`/consultor?c=${c.id}`} className="line-clamp-2 flex-1">
                     {c.titulo}
                   </Link>
-                  <form action={apagarConversa}>
+                  <Formulario acao={apagarConversa} mensagemOk={null} retornoEmLinha>
                     <input type="hidden" name="id" value={c.id} />
-                    <button title="Apagar conversa" aria-label="Apagar conversa" className="text-xs text-suave opacity-60 hover:text-negativo group-hover:opacity-100">
+                    <BotaoEnviar variante="link" pendente="…" title="Apagar conversa" aria-label="Apagar conversa" className="text-xs text-suave no-underline opacity-60 hover:text-negativo group-hover:opacity-100">
                       ×
-                    </button>
-                  </form>
+                    </BotaoEnviar>
+                  </Formulario>
                 </li>
               ))}
             </ul>

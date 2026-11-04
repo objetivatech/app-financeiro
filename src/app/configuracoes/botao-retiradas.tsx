@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { explicarErro } from "@/components/formulario";
 import { procurarRetiradas } from "./acoes";
 
 export function BotaoRetiradas() {
@@ -10,7 +11,15 @@ export function BotaoRetiradas() {
     <span className="inline-flex flex-wrap items-center gap-2">
       <button
         type="button"
-        onClick={() => iniciar(async () => setMsg((await procurarRetiradas()).ok))}
+        onClick={() =>
+          iniciar(async () => {
+            try {
+              setMsg((await procurarRetiradas()).ok);
+            } catch (erro) {
+              setMsg(explicarErro(erro));
+            }
+          })
+        }
         disabled={pendente}
         className="rounded-md border border-borda px-3 py-1.5 text-sm hover:border-foreground/30 disabled:opacity-50"
       >

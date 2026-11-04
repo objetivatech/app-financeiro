@@ -1,5 +1,6 @@
 "use client";
 
+import { seguro } from "@/components/formulario";
 import { useActionState } from "react";
 import { Botao, estiloCampo } from "@/components/ui";
 import { lancarFatura, salvarCartao } from "./acoes";
@@ -36,7 +37,7 @@ const reais = (centavos: number | null) => (centavos === null ? "" : (centavos /
 
 /** Cadastro (sem `cartao`) ou edição de um cartão. */
 export function FormCartao({ cartao, contas, emissores }: { cartao?: DadosCartao; contas: Conta[]; emissores: { id: string; nome: string }[] }) {
-  const [estado, acao, pendente] = useActionState(salvarCartao, null);
+  const [estado, acao, pendente] = useActionState(seguro(salvarCartao), null);
   return (
     <form action={acao} className="grid gap-3">
       {cartao && <input type="hidden" name="id" value={cartao.id} />}
@@ -98,7 +99,7 @@ export function FormCartao({ cartao, contas, emissores }: { cartao?: DadosCartao
 
 /** Lançamento manual da fatura (quando não há PDF, ou para corrigir o total). */
 export function FormFatura({ cartoes, cartaoInicial }: { cartoes: Conta[]; cartaoInicial?: number }) {
-  const [estado, acao, pendente] = useActionState(lancarFatura, null);
+  const [estado, acao, pendente] = useActionState(seguro(lancarFatura), null);
   return (
     <form action={acao} className="grid gap-3">
       <div className="grid items-start gap-3 sm:grid-cols-2">

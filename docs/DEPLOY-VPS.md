@@ -23,6 +23,7 @@ Nenhum desses dados existe pronto em algum lugar: você cria cada um. O arquivo 
 
 | Variável | O que é | Como obter |
 |---|---|---|
+| `APP_DOMINIO` | Endereço público do app, sem `https://` (ex.: `financas.seudominio.com.br`). | O mesmo *Public hostname* do passo 3. Sem ele, atrás da Cloudflare os botões de salvar podem ser recusados. Depois de mudar, rode o `docker compose ... up -d --build` (o valor entra no build). |
 | `POSTGRES_PASSWORD` | Senha do banco de dados. Só o app usa; você não vai digitá-la no dia a dia. | Invente, ou gere na VPS com `openssl rand -base64 24` e cole o resultado. |
 | `ANTHROPIC_API_KEY` | Chave para o app usar a IA (Claude). | Crie uma conta em [console.anthropic.com](https://console.anthropic.com), adicione créditos em *Billing* e gere a chave em *Settings → API Keys* (começa com `sk-ant-`). É uma cobrança separada da assinatura do Claude.ai. Defina um limite mensal de gasto em *Limits*. |
 | `APP_USUARIO` / `APP_SENHA` | Login e senha que o navegador vai pedir ao abrir o app. | Você escolhe. Use uma senha forte e diferente das outras. |
@@ -105,3 +106,13 @@ docker compose logs --tail 30 migrar app
   no branch padrão do repositório (o mesmo do GitHub).
 - Se o commit está certo mas a versão não mudou, a imagem não foi refeita: rode de novo com `--build`.
 - No navegador, recarregue com Ctrl+Shift+R para não usar a página guardada em cache.
+
+### Um botão de salvar mostra erro?
+
+Todo botão de salvar mostra "Salvando…" e depois "✓ Salvo" ou o motivo do erro.
+
+- **"O app foi atualizado depois que esta página abriu"**: recarregue a página (F5). Acontece com abas abertas
+  antes de uma atualização.
+- **"O servidor não conseguiu concluir"**: rode `docker compose logs --tail 50 app`. Se aparecer
+  `Invalid Server Actions request` ou `x-forwarded-host ... does not match origin`, falta o `APP_DOMINIO` no `.env`
+  (o mesmo endereço do túnel). Preencha e rode `docker compose --profile tunel up -d --build`.

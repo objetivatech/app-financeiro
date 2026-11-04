@@ -24,7 +24,11 @@ services:
     restart: "no"
 
   app:
-    build: { context: ., target: app }
+    build:
+      context: .
+      target: app
+      args:
+        APP_DOMINIO: ${APP_DOMINIO:-}
     restart: unless-stopped
     env_file: .env
     environment:

@@ -11,6 +11,8 @@ RUN pnpm install --frozen-lockfile
 
 # Build do Next em modo standalone
 FROM deps AS build
+# Domínio público, para o Next aceitar os formulários vindos dele (ver next.config.ts).
+ARG APP_DOMINIO=""
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm build

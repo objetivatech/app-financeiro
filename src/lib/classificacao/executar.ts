@@ -302,3 +302,33 @@ export async function reaplicarIdentidade(db: Db): Promise<number> {
   }
   return alteradas;
 }
+
+const fundo = globalThis as unknown as { __reclassificando?: Promise<void> | null; __reclassificarDeNovo?: boolean };
+
+/** Há uma reclassificação em segundo plano rodando (para as telas avisarem). */
+export const reclassificandoEmSegundoPlano = () => Boolean(fundo.__reclassificando);
+
+/**
+ * Classifica as pendentes sem segurar quem pediu (um clique em Salvar não pode esperar a IA:
+ * atrás da Cloudflare a resposta cai em ~100 s). Pedidos durante uma execução viram uma nova
+ * rodada ao final, nunca duas ao mesmo tempo.
+ */
+export function reclassificarEmSegundoPlano(db: Db, aoTerminar?: () => Promise<unknown>): void {
+  if (fundo.__reclassificando) {
+    fundo.__reclassificarDeNovo = true;
+    return;
+  }
+  fundo.__reclassificando = (async () => {
+    try {
+      do {
+        fundo.__reclassificarDeNovo = false;
+        await classificarPendentes(db);
+      } while (fundo.__reclassificarDeNovo);
+      await aoTerminar?.();
+    } catch (erro) {
+      console.error("Reclassificação em segundo plano falhou", erro);
+    } finally {
+      fundo.__reclassificando = null;
+    }
+  })();
+}

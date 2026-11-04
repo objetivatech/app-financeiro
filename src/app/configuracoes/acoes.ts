@@ -2,6 +2,7 @@
 
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import type { RetornoAcao } from "@/components/formulario";
 import { CHAVE_PERFIL, reaplicarIdentidade } from "@/lib/classificacao/executar";
 import { atualizarAlertas } from "@/lib/consultor/alertas";
 import { obterDb } from "@/lib/db";
@@ -9,7 +10,7 @@ import { configuracoes, regras } from "@/lib/db/schema";
 import { obterPerfilFiscal, salvarPerfilFiscal } from "@/lib/fiscal/perfil";
 import { parseValorCentavos } from "@/lib/importacao/util";
 
-export async function salvarPerfil(formData: FormData) {
+export async function salvarPerfil(formData: FormData): Promise<RetornoAcao> {
   const valor = String(formData.get("perfil") ?? "").slice(0, 4000);
   await obterDb()
     .insert(configuracoes)
@@ -18,14 +19,14 @@ export async function salvarPerfil(formData: FormData) {
   revalidatePath("/configuracoes");
 }
 
-export async function excluirRegra(formData: FormData) {
+export async function excluirRegra(formData: FormData): Promise<RetornoAcao> {
   await obterDb().delete(regras).where(eq(regras.id, Number(formData.get("id"))));
   revalidatePath("/configuracoes");
 }
 
 const mesValido = (v: FormDataEntryValue | null) => (typeof v === "string" && /^\d{4}-\d{2}$/.test(v) ? v : "");
 
-export async function salvarDadosFiscais(formData: FormData) {
+export async function salvarDadosFiscais(formData: FormData): Promise<RetornoAcao> {
   const db = obterDb();
   const atual = await obterPerfilFiscal(db);
   const dinheiro = (campo: string) => Math.max(0, parseValorCentavos(String(formData.get(campo) ?? "")) ?? 0);
@@ -62,11 +63,13 @@ export async function salvarDadosFiscais(formData: FormData) {
   };
   await salvarPerfilFiscal(db, novo);
   // Seu nome/CPF ou o da empresa mudaram: procura retiradas e aportes nas transações que já existem.
+  let reconhecidas = 0;
   if (JSON.stringify([novo.nomeSocio, novo.cpfSocio, novo.nomesEmpresa]) !== identidadeAntes) {
-    await reaplicarIdentidade(db);
+    reconhecidas = await reaplicarIdentidade(db);
     await atualizarAlertas(db, { atualizarCompromissos: false }).catch(() => undefined);
   }
   for (const p of ["/configuracoes", "/impostos", "/", "/pf", "/pj", "/transacoes"]) revalidatePath(p);
+  return { ok: reconhecidas ? `Salvo. ${reconhecidas} transação(ões) reconhecida(s) como retirada, aporte ou transferência.` : "Salvo." };
 }
 
 export async function procurarRetiradas(): Promise<{ ok: string }> {

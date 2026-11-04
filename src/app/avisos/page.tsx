@@ -1,9 +1,10 @@
+import { BotaoEnviar, Formulario } from "@/components/formulario";
 import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { CartaoAviso } from "@/components/aviso";
 import { LinkAjuda } from "@/components/link-ajuda";
-import { Botao, Cartao, Carregando } from "@/components/ui";
+import { Cartao, Carregando } from "@/components/ui";
 import { alertasResolvidosRecentes, atualizarAlertasSeNecessario, listarAlertasAtivos } from "@/lib/consultor/alertas";
 import { obterDb } from "@/lib/db";
 import { formatarData } from "@/lib/formato";
@@ -25,9 +26,9 @@ export default function PaginaAvisos() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <form action={verificarAgora}>
-            <Botao type="submit">Verificar agora</Botao>
-          </form>
+          <Formulario acao={verificarAgora} retornoEmLinha className="flex flex-wrap items-center gap-2">
+            <BotaoEnviar pendente="Verificando…">Verificar agora</BotaoEnviar>
+          </Formulario>
         </div>
       </div>
       <Suspense fallback={<Carregando />}>

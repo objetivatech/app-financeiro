@@ -18,6 +18,8 @@ import { obterDb } from "@/lib/db";
 import { compromissos, dividas, recorrencias } from "@/lib/db/schema";
 import { normalizarTexto, parseData, parseValorCentavos } from "@/lib/importacao/util";
 
+import type { RetornoAcao } from "@/components/formulario";
+
 type Estado = { erro?: string; ok?: string } | null;
 
 const texto = (fd: FormData, campo: string) => String(fd.get(campo) ?? "").trim();
@@ -133,30 +135,34 @@ export async function novaContaAvulsa(_: Estado, fd: FormData): Promise<Estado> 
   return { ok: `"${descricao}" lançada.` };
 }
 
-export async function pagar(fd: FormData) {
+export async function pagar(fd: FormData): Promise<RetornoAcao> {
   await marcarPago(obterDb(), Number(fd.get("id")), dataDe(fd, "data") ?? hojeBrasil());
   atualizarTelas();
+  return null;
 }
 
-export async function desfazer(fd: FormData) {
+export async function desfazer(fd: FormData): Promise<RetornoAcao> {
   await desfazerPagamento(obterDb(), Number(fd.get("id")));
   atualizarTelas();
+  return null;
 }
 
-export async function lembreteFeito(fd: FormData) {
+export async function lembreteFeito(fd: FormData): Promise<RetornoAcao> {
   await cumprirLembrete(obterDb(), Number(fd.get("id")));
   atualizarTelas();
+  return null;
 }
 
-export async function excluirDivida(fd: FormData) {
-  if (fd.get("confirmar") !== "on") return;
+export async function excluirDivida(fd: FormData): Promise<RetornoAcao> {
+  if (fd.get("confirmar") !== "on") return { erro: "Marque a caixa ao lado para confirmar a exclusão." };
   // As parcelas caem junto (cascata).
   await obterDb().delete(dividas).where(eq(dividas.id, Number(fd.get("id"))));
   atualizarTelas();
+  return null;
 }
 
 /** Encerra a conta fixa: some dos próximos meses, mas o histórico do que já foi pago fica. */
-export async function encerrarRecorrencia(fd: FormData) {
+export async function encerrarRecorrencia(fd: FormData): Promise<RetornoAcao> {
   const db = obterDb();
   const id = Number(fd.get("id"));
   await db.update(recorrencias).set({ ativa: false, fim: hojeBrasil() }).where(eq(recorrencias.id, id));
@@ -164,4 +170,5 @@ export async function encerrarRecorrencia(fd: FormData) {
     .delete(compromissos)
     .where(and(eq(compromissos.recorrenciaId, id), inArray(compromissos.status, ["aberto", "vencido"]), gte(compromissos.vencimento, hojeBrasil())));
   atualizarTelas();
+  return null;
 }
