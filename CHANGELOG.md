@@ -3,6 +3,13 @@
 Todas as mudanças relevantes do app, da mais recente para a mais antiga. O formato segue
 [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e as versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.9.1] — 2026-11-04
+
+### Corrigido
+- **Mercado Pago:** a sincronização parava com erro 403 (`PA_UNAUTHORIZED_RESULT_FROM_POLICIES`) quando o token não tinha
+  acesso aos dados da conta. Agora ela segue com os pagamentos e o extrato (defina PF/PJ da conta em Contas) e, se o
+  Mercado Pago recusar tudo, explica o que conferir no token. Manual com o passo a passo da criação da aplicação.
+
 ## [0.9.0] — 2026-11-04
 
 ### Adicionado

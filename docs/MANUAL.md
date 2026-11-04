@@ -528,8 +528,10 @@ Traz automaticamente, só lendo (o app nunca cria cobranças nem move dinheiro):
 **Como conectar**
 
 1. Entre em **mercadopago.com.br/developers** com a conta que quer acompanhar → **Suas integrações** → **Criar
-   aplicação** (qualquer nome).
-2. Em **Credenciais de produção**, copie o **Access Token** (começa com `APP_USR-`).
+   aplicação** (qualquer nome). Não existe aplicação "só de consulta": escolha **Checkout Pro** e a API sugerida
+   (Orders ou Preferences, tanto faz) — é só um rótulo; o app nunca cria cobranças.
+2. Em **Produção → Credenciais de produção**, ative as credenciais (ramo de atividade e site) e copie o **Access Token**
+   (começa com `APP_USR-`). As credenciais de **teste** não servem: apontam para uma conta fictícia.
 3. Na VPS, no `.env`: `MERCADOPAGO_ACCESS_TOKEN=APP_USR-...`, depois `docker compose up -d` e **Integrações →
    Sincronizar agora**.
 
@@ -543,6 +545,10 @@ Traz automaticamente, só lendo (o app nunca cria cobranças nem move dinheiro):
   painel do Mercado Pago, baixe o **Relatório de Liberações** em CSV e envie em [Importar](#importar) — o app reconhece
   o arquivo.
 - Nada duplica com extratos do Mercado Pago que você já tenha importado por arquivo.
+- **Erro 403 (`PA_UNAUTHORIZED_RESULT_FROM_POLICIES`):** o Mercado Pago recusou o token para aquela consulta. Se só os
+  dados da conta forem recusados, o app segue com os pagamentos e o extrato — defina em [Contas](#contas) se a conta
+  "Mercado Pago" é PF ou PJ. Se tudo for recusado: confira se é o token de **produção**, se as credenciais de produção
+  foram **ativadas** e se a aplicação foi criada **logado na mesma conta** que você quer acompanhar.
 - O Access Token dá acesso à conta: guarde-o só no `.env` da VPS. Se vazar, renove nas credenciais da aplicação.
 
 <a id="configuracoes"></a>

@@ -54,6 +54,17 @@ async function contaDoMercadoPago(db: Db, salva: number | null, escopo: Escopo |
   return nova.id;
 }
 
+/** O Access Token de produção termina com o ID do usuário dono da conta: APP_USR-<app>-<data>-<hash>-<usuário>. */
+export function usuarioDoToken(token = process.env.MERCADOPAGO_ACCESS_TOKEN): number | undefined {
+  const id = token?.match(/^APP_USR-.+-(\d+)$/)?.[1];
+  return id ? Number(id) : undefined;
+}
+
+export const MENSAGEM_403 =
+  "O Mercado Pago recusou o Access Token (403). Confira: (1) é o Access Token de PRODUÇÃO (APP_USR-…), não o de teste; " +
+  "(2) as credenciais de produção da aplicação foram ativadas (ramo de atividade e site preenchidos); " +
+  "(3) a aplicação foi criada logado na mesma conta do Mercado Pago que você quer acompanhar. Se continuar, use Importar com o CSV do Relatório de Liberações.";
+
 const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Procura, entre os relatórios gerados, o do período pedido e devolve o nome do arquivo. */
@@ -107,33 +118,50 @@ export async function sincronizarMercadoPago(db: Db, opcoes: { signal?: AbortSig
     await db.insert(integracoes).values({ id: ID, status: "sincronizando" }).onConflictDoUpdate({ target: integracoes.id, set: { status: "sincronizando", mensagem: null } });
 
     // 1. Quem é a conta (CPF → PF, CNPJ → PJ). O documento fica só no banco do app.
-    const eu = await mpGet<MpUsuario>("/users/me", {}, signal);
-    const escopo = escopoDoDocumento(eu.identification?.type);
+    // Alguns tokens (aplicações de checkout) não têm permissão para /users/me: aí seguimos com o
+    // ID que vem no próprio token e com o PF/PJ já definido na conta (editável em Contas).
+    let eu: MpUsuario | null = null;
+    try {
+      eu = await mpGet<MpUsuario>("/users/me", {}, signal);
+    } catch (erro) {
+      if (!(erro instanceof ErroMercadoPago) || erro.status !== 403) throw erro;
+      resumo.avisos.push("O Mercado Pago não liberou os dados da conta para este token; defina se ela é PF ou PJ em Contas.");
+    }
+    const usuarioId = eu?.id ?? usuarioDoToken() ?? dados.usuarioId;
+    const escopo = escopoDoDocumento(eu?.identification?.type) ?? dados.escopo ?? null;
     resumo.escopo = escopo;
-    const documento = eu.identification?.number?.replace(/\D/g, "") || null;
-    if (documento && escopo) {
+    const documento = eu?.identification?.number?.replace(/\D/g, "") || null;
+    if (eu && documento && escopo) {
       const nome = eu.company?.corporate_name || [eu.first_name, eu.last_name].filter(Boolean).join(" ") || (escopo === "PJ" ? "Minha empresa" : "Eu");
       await db.insert(titulares).values({ tipo: escopo, documento, nome }).onConflictDoNothing();
     }
     const contaId = await contaDoMercadoPago(db, salvo?.contaId ?? null, escopo);
     const conta = (await db.query.contas.findFirst({ where: eq(contas.id, contaId) }))!;
     resumo.conta = conta.apelido;
+    if (!resumo.escopo && conta.escopoPadrao !== "misto") resumo.escopo = conta.escopoPadrao as Escopo;
     const escopoConta: Escopo = conta.escopoPadrao === "PJ" ? "PJ" : "PF";
+    let algumPassoFuncionou = Boolean(eu);
 
     // 2. Pagamentos recebidos → A receber.
-    const inicioPagamentos = primeiraVez ? primeiroDoMes(-MESES_HISTORICO) : somarDias(hoje, -120);
-    for await (const p of mpListarPagamentos(
-      { sort: "date_created", criteria: "desc", range: "date_created", begin_date: `${inicioPagamentos}T00:00:00.000-03:00`, end_date: "NOW" },
-      signal,
-    )) {
-      if (eu.id !== undefined && p.collector_id !== undefined && String(p.collector_id) !== String(eu.id)) continue; // só o que você recebeu
-      const campos = compromissoDoPagamento(p, hoje, escopoConta);
-      if (!campos) continue;
-      await db
-        .insert(compromissos)
-        .values({ ...campos, contaId })
-        .onConflictDoUpdate({ target: [compromissos.origem, compromissos.idExterno], set: { ...campos, contaId, atualizadoEm: new Date() } });
-      resumo.pagamentos++;
+    try {
+      const inicioPagamentos = primeiraVez ? primeiroDoMes(-MESES_HISTORICO) : somarDias(hoje, -120);
+      for await (const p of mpListarPagamentos(
+        { sort: "date_created", criteria: "desc", range: "date_created", begin_date: `${inicioPagamentos}T00:00:00.000-03:00`, end_date: "NOW" },
+        signal,
+      )) {
+        if (usuarioId !== undefined && p.collector_id !== undefined && String(p.collector_id) !== String(usuarioId)) continue; // só o que você recebeu
+        const campos = compromissoDoPagamento(p, hoje, escopoConta);
+        if (!campos) continue;
+        await db
+          .insert(compromissos)
+          .values({ ...campos, contaId })
+          .onConflictDoUpdate({ target: [compromissos.origem, compromissos.idExterno], set: { ...campos, contaId, atualizadoEm: new Date() } });
+        resumo.pagamentos++;
+      }
+      algumPassoFuncionou = true;
+    } catch (erro) {
+      if (!(erro instanceof ErroMercadoPago) || erro.status !== 403) throw erro;
+      resumo.avisos.push("O Mercado Pago não liberou a consulta de pagamentos para este token.");
     }
 
     // 3. Extrato pelo Relatório de Liberações, de onde parou até ontem.
@@ -169,12 +197,15 @@ export async function sincronizarMercadoPago(db: Db, opcoes: { signal?: AbortSig
           resumo.avisos.push("O Mercado Pago ainda está gerando o extrato; ele entra na próxima sincronização.");
         }
       }
+      algumPassoFuncionou = true;
     } catch (erro) {
       // O extrato pela API é o passo mais sujeito a variação: não derruba o resto da sincronização.
       resumo.avisos.push(
         `Extrato pela API indisponível (${erro instanceof Error ? erro.message.slice(0, 160) : String(erro)}). Alternativa: baixe o Relatório de Liberações no painel do Mercado Pago e importe o CSV em Importar.`,
       );
     }
+
+    if (!algumPassoFuncionou) throw new ErroMercadoPago(MENSAGEM_403, 403);
 
     await db
       .update(integracoes)
@@ -184,7 +215,7 @@ export async function sincronizarMercadoPago(db: Db, opcoes: { signal?: AbortSig
         ultimaSincronizacao: new Date(),
         extratoAte,
         contaId,
-        dados: { usuarioId: eu.id, escopo, relatorioPendente: pendente, ultimoResumo: resumo } satisfies DadosIntegracao,
+        dados: { usuarioId, escopo: resumo.escopo, relatorioPendente: pendente, ultimoResumo: resumo } satisfies DadosIntegracao,
       })
       .where(eq(integracoes.id, ID));
 
