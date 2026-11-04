@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, gte, inArray, isNotNull, lt, sql } from "drizzle-orm";
 import { hojeBrasil, somarDias } from "../datas";
 import type { Db } from "../db";
-import { compromissos, contas, faturas, importacoes, transacoes, type Conta } from "../db/schema";
+import { cartoesVinculados, compromissos, contas, faturas, importacoes, transacoes, type Conta } from "../db/schema";
 import { faturaDaCompra, parcelasFuturas, proximoVencimento, somarMeses, totalPorMes, type ParcelaFutura, type ParcelaLancada } from "./calculo";
 
 /** Escopo usado para o pagamento do cartão: cartão misto conta como pessoal (está no seu nome). */
@@ -135,8 +135,21 @@ async function parcelasLancadas(db: Db, cartoes: Conta[]): Promise<ParcelaLancad
   return resultado;
 }
 
+export interface VinculadoResumo {
+  id: number;
+  tipo: "virtual" | "adicional";
+  apelido: string;
+  final: string;
+  ativo: boolean;
+  canceladoEm: string | null;
+  /** Compras nos últimos 90 dias com este final. */
+  compras90d: number;
+  total90dCentavos: number;
+}
+
 export interface ResumoCartao {
   conta: Conta;
+  vinculados: VinculadoResumo[];
   contaPagamentoApelido: string | null;
   faturas: { id: number; vencimento: string; fechamento: string | null; valorCentavos: number; minimoCentavos: number | null; origem: string; status: string | null }[];
   /** Próxima fatura ainda não paga (conhecida). */
@@ -162,7 +175,7 @@ export async function resumoCartoes(db: Db, mesesProjecao = 6): Promise<ResumoCa
   const cartoes = await db.query.contas.findMany({ where: eq(contas.tipo, "cartao_credito"), orderBy: [asc(contas.apelido)] });
   if (cartoes.length === 0) return [];
   const ids = cartoes.map((c) => c.id);
-  const [listaFaturas, lancadas, pagadoras, aVista, encargos] = await Promise.all([
+  const [listaFaturas, lancadas, pagadoras, aVista, encargos, vinculados, porFinal] = await Promise.all([
     db
       .select({
         id: faturas.id,
@@ -197,6 +210,17 @@ export async function resumoCartoes(db: Db, mesesProjecao = 6): Promise<ResumoCa
       .select({ contaId: transacoes.contaId, descricao: transacoes.descricaoNormalizada, valor: transacoes.valorCentavos })
       .from(transacoes)
       .where(and(inArray(transacoes.contaId, ids), lt(transacoes.valorCentavos, 0), gte(transacoes.data, somarDias(hoje, -90)))),
+    db.select().from(cartoesVinculados).where(inArray(cartoesVinculados.contaId, ids)).orderBy(asc(cartoesVinculados.final)),
+    db
+      .select({
+        contaId: transacoes.contaId,
+        final: transacoes.finalCartao,
+        qtd: sql<number>`count(*)::int`,
+        total: sql<number>`coalesce(-sum(${transacoes.valorCentavos}), 0)::bigint`,
+      })
+      .from(transacoes)
+      .where(and(inArray(transacoes.contaId, ids), lt(transacoes.valorCentavos, 0), isNotNull(transacoes.finalCartao), gte(transacoes.data, somarDias(hoje, -90))))
+      .groupBy(transacoes.contaId, transacoes.finalCartao),
   ]);
   const apelidos = new Map(pagadoras.map((c) => [c.id, c.apelido]));
   const todasFuturas = parcelasFuturas(lancadas, hoje);
@@ -220,6 +244,12 @@ export async function resumoCartoes(db: Db, mesesProjecao = 6): Promise<ResumoCa
     }
     return {
       conta: c,
+      vinculados: vinculados
+        .filter((v) => v.contaId === c.id)
+        .map((v) => {
+          const uso = porFinal.find((p) => p.contaId === c.id && p.final === v.final);
+          return { id: v.id, tipo: v.tipo, apelido: v.apelido, final: v.final, ativo: v.ativo, canceladoEm: v.canceladoEm, compras90d: uso?.qtd ?? 0, total90dCentavos: Number(uso?.total ?? 0) };
+        }),
       contaPagamentoApelido: c.contaPagamentoId ? (apelidos.get(c.contaPagamentoId) ?? null) : null,
       faturas: fs.slice(0, 12),
       faturaAberta: aberta ? { vencimento: aberta.vencimento, valorCentavos: aberta.valorCentavos, status: aberta.status! } : null,
@@ -255,4 +285,20 @@ export async function previsaoCartoesParaFluxo(db: Db, ate: string): Promise<{ e
     for (const v of porMes.values()) saida.push({ escopo: escopoDoCartao(r.conta), vencimento: v.vencimento, valorCentavos: v.valor });
   }
   return saida;
+}
+
+export async function salvarVinculado(db: Db, v: { contaId: number; tipo: "virtual" | "adicional"; apelido: string; final: string }): Promise<void> {
+  await db
+    .insert(cartoesVinculados)
+    .values(v)
+    .onConflictDoUpdate({ target: [cartoesVinculados.contaId, cartoesVinculados.final], set: { tipo: v.tipo, apelido: v.apelido } });
+}
+
+/** Cancela (ou reativa) um cartão virtual/adicional. As compras antigas continuam ligadas a ele. */
+export async function alternarVinculado(db: Db, id: number, ativo: boolean): Promise<void> {
+  await db.update(cartoesVinculados).set({ ativo, canceladoEm: ativo ? null : hojeBrasil() }).where(eq(cartoesVinculados.id, id));
+}
+
+export async function excluirVinculado(db: Db, id: number): Promise<void> {
+  await db.delete(cartoesVinculados).where(eq(cartoesVinculados.id, id));
 }

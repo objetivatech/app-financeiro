@@ -46,3 +46,25 @@ describe("datas em Brasília", () => {
     expect(somarDias("2026-03-01", -1)).toBe("2026-02-28");
   });
 });
+
+describe("enquadramento MEI → ME", async () => {
+  const { EsquemaPerfilFiscal, meiAte, regimeNoMes } = await import("../perfil");
+  const { inicioDaFolha } = await import("../indicadores");
+  const perfil = EsquemaPerfilFiscal.parse({
+    regimes: [
+      { regime: "mei", inicio: "2000-01" },
+      { regime: "simples", inicio: "2026-09" },
+    ],
+  });
+  it("lê até quando foi MEI e o regime de cada mês", () => {
+    expect(meiAte(perfil)).toBe("2026-08");
+    expect(regimeNoMes(perfil, "2026-08")).toBe("mei");
+    expect(regimeNoMes(perfil, "2026-11")).toBe("simples");
+    expect(regimeNoMes(EsquemaPerfilFiscal.parse({}), "2026-11")).toBe("simples");
+  });
+  it("a folha começa com a ME, a menos que o pró-labore tenha data própria", () => {
+    expect(inicioDaFolha(perfil)).toBe("2026-09");
+    expect(inicioDaFolha({ ...perfil, proLaboreDesde: "2026-10" })).toBe("2026-10");
+    expect(inicioDaFolha(EsquemaPerfilFiscal.parse({}))).toBeNull();
+  });
+});

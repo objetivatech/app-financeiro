@@ -3,7 +3,7 @@ import { resumoCartoes } from "../cartoes/servico";
 import { atualizarCompromissos, contasAPagar, fluxoProjetado, lembretesPendentes, resumoDividas, saldosConhecidos } from "../compromissos/servico";
 import { hojeBrasil, somarDias } from "../datas";
 import type { Db } from "../db";
-import { alertas, categorias, contas, integracoes, transacoes, type Alerta } from "../db/schema";
+import { alertas, cartoesVinculados, categorias, contas, integracoes, transacoes, type Alerta } from "../db/schema";
 import { indicadoresFiscais, resumoRecebiveis } from "../fiscal/indicadores";
 import { deslocarMes } from "../formato";
 import { media, visaoPF, visaoPJ } from "../visoes/calculo";
@@ -16,7 +16,7 @@ export async function montarRetrato(db: Db): Promise<Retrato> {
   const hoje = hojeBrasil();
   const mesAtual = hoje.slice(0, 7);
   const mesFechado = deslocarMes(mesAtual, -1);
-  const [somas, saldos, dividas, cartoes, recebiveis, fiscal, fluxo, aPagar, lembretes, lista, paradas, revisar] = await Promise.all([
+  const [somas, saldos, dividas, cartoes, recebiveis, fiscal, fluxo, aPagar, lembretes, lista, paradas, revisar, cancelados] = await Promise.all([
     somasPorMes(db, deslocarMes(mesFechado, -3), mesFechado),
     saldosConhecidos(db),
     resumoDividas(db),
@@ -42,6 +42,7 @@ export async function montarRetrato(db: Db): Promise<Retrato> {
         natureza: transacoes.natureza,
         parcelaAtual: transacoes.parcelaAtual,
         parcelaTotal: transacoes.parcelaTotal,
+        finalCartao: transacoes.finalCartao,
       })
       .from(transacoes)
       .innerJoin(contas, eq(contas.id, transacoes.contaId))
@@ -50,6 +51,11 @@ export async function montarRetrato(db: Db): Promise<Retrato> {
       .orderBy(asc(transacoes.data)),
     contasSemExtratoRecente(db, hoje),
     db.$count(transacoes, eq(transacoes.revisar, true)),
+    db
+      .select({ contaId: cartoesVinculados.contaId, contaApelido: contas.apelido, apelido: cartoesVinculados.apelido, final: cartoesVinculados.final, canceladoEm: cartoesVinculados.canceladoEm })
+      .from(cartoesVinculados)
+      .innerJoin(contas, eq(contas.id, cartoesVinculados.contaId))
+      .where(eq(cartoesVinculados.ativo, false)),
   ]);
   // Os 3 meses fechados mais recentes = base das médias; o 4º anterior entra só na comparação do custo de vida.
   const pjs = somas.map(visaoPJ);
@@ -74,6 +80,10 @@ export async function montarRetrato(db: Db): Promise<Retrato> {
           mesesComDados: fiscal.mesesComDados,
           proLaboreMensalCentavos: fiscal.perfil.proLaboreMensalCentavos,
           sujeitoFatorR: fiscal.perfil.sujeitoFatorR,
+          regimeAtual: fiscal.regimeAtual,
+          mesesDeFolha: fiscal.mesesDeFolha,
+          fatorRPleno: fiscal.fatorRPleno,
+          folhaCompletaEm: fiscal.folhaCompletaEm,
         }
       : null,
     fluxo: { semanas: fluxo.semanas, contasSemSaldo: fluxo.contasSemSaldo },
@@ -81,6 +91,7 @@ export async function montarRetrato(db: Db): Promise<Retrato> {
     lembretes,
     transacoes: lista.map((t) => ({ ...t, valorCentavos: Number(t.valorCentavos) })),
     contasParadas: paradas,
+    vinculadosCancelados: cancelados,
     paraRevisar: revisar,
   };
 }

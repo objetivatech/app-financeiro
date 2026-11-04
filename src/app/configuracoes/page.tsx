@@ -8,7 +8,8 @@ import { formatarMoeda, ROTULOS_NATUREZA } from "@/lib/formato";
 import { iaDisponivel, modeloDa } from "@/lib/ia/cliente";
 import { custosDoMes } from "@/lib/ia/custos";
 import { LinkAjuda } from "@/components/link-ajuda";
-import { obterPerfilFiscal } from "@/lib/fiscal/perfil";
+import { meiAte, obterPerfilFiscal } from "@/lib/fiscal/perfil";
+import { BotaoRetiradas } from "./botao-retiradas";
 import { excluirRegra, salvarDadosFiscais, salvarPerfil } from "./acoes";
 
 const EXEMPLO_PERFIL = `Ex.: Sou sócio único de uma agência de marketing digital (Simples Nacional, Anexo III).
@@ -61,8 +62,39 @@ async function Conteudo() {
             <input type="checkbox" name="sujeitoFatorR" defaultChecked={fiscal.sujeitoFatorR} />
             Minha atividade principal está sujeita ao Fator R (Anexo III ou V)
           </label>
-          <div className="md:col-span-2">
+
+          <h3 id="enquadramento" className="mt-2 font-medium md:col-span-2">Enquadramento da empresa</h3>
+          <label className="grid gap-1">
+            <span className="text-suave">Foi MEI até (mês)</span>
+            <input type="month" name="meiAte" defaultValue={meiAte(fiscal) ?? ""} className={estiloCampo} />
+            <span className="text-xs text-suave">Deixe vazio se a empresa sempre foi ME/EPP no Simples. O mês seguinte vira o início como ME.</span>
+          </label>
+          <label className="grid gap-1">
+            <span className="text-suave">Pró-labore desde (mês)</span>
+            <input type="month" name="proLaboreDesde" defaultValue={fiscal.proLaboreDesde} className={estiloCampo} />
+            <span className="text-xs text-suave">A folha do Fator R conta o pró-labore só a partir deste mês (MEI não tem pró-labore).</span>
+          </label>
+
+          <h3 id="identificacao" className="mt-2 font-medium md:col-span-2">Como você e a empresa aparecem nos Pix</h3>
+          <label className="grid gap-1">
+            <span className="text-suave">Seu nome</span>
+            <input name="nomeSocio" defaultValue={fiscal.nomeSocio} placeholder="Nome e sobrenome" className={estiloCampo} />
+          </label>
+          <label className="grid gap-1">
+            <span className="text-suave">Seu CPF (opcional)</span>
+            <input name="cpfSocio" inputMode="numeric" defaultValue={fiscal.cpfSocio} className={estiloCampo} />
+            <span className="text-xs text-suave">Fica só no banco do app; nunca vai para a IA.</span>
+          </label>
+          <label className="grid gap-1 md:col-span-2">
+            <span className="text-suave">Nomes da empresa (separe com ;)</span>
+            <input name="nomesEmpresa" defaultValue={fiscal.nomesEmpresa.join("; ")} placeholder="Razão social; nome fantasia" className={estiloCampo} />
+            <span className="text-xs text-suave">
+              Com isso o app reconhece retiradas (empresa → você) e aportes (você → empresa) mesmo quando só um dos extratos foi importado.
+            </span>
+          </label>
+          <div className="flex flex-wrap items-center gap-3 md:col-span-2">
             <Botao type="submit">Salvar</Botao>
+            <BotaoRetiradas />
           </div>
         </form>
       </Cartao>

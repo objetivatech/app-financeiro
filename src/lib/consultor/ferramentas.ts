@@ -210,6 +210,7 @@ export function ferramentasDoConsultor(db: Db) {
           const [f, r] = await Promise.all([indicadoresFiscais(db), resumoRecebiveis(db)]);
           return json({
             proLaboreCadastradoCentavos: f.perfil.proLaboreMensalCentavos,
+            enquadramento: { regimeAtual: f.regimeAtual, foiMeiAte: f.meiAte, mesesComProLaboreNaFolha: f.mesesDeFolha, fatorRSeOProLaboreValesse12Meses: pct(f.fatorRPleno), folhaCompletaEm: f.folhaCompletaEm },
             fonteDaReceita: f.fonte,
             mesesComDados: f.mesesComDados,
             receitaMensal: f.receitaMensal,

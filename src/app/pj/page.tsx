@@ -47,6 +47,15 @@ async function Conteudo({ searchParams }: { searchParams: Busca }) {
         <AvisosDoPainel escopo="PJ" limite={3} />
       </Suspense>
 
+      {d.serie.every((x) => x.paraOSocio === 0) && d.serie.some((x) => x.receitaTotal > 0) && (
+        <p className="rounded-md border border-alerta/40 bg-alerta/10 p-3 text-sm">
+          ⚠ Nenhum dinheiro da empresa para você foi identificado nos últimos 6 meses. Se você recebe pró-labore ou faz Pix da empresa
+          para a sua conta, informe <Link href="/configuracoes#identificacao" className="underline">seu nome e o da empresa</Link> (o app
+          procura esses Pix nas transações) ou importe o extrato da sua conta pessoal: sem isso, as retiradas aparecem como despesa da
+          empresa.
+        </p>
+      )}
+
       {d.pendencias.semEscopo > 0 && (
         <p className="rounded-md border border-alerta/40 bg-alerta/10 p-3 text-sm">
           ⚠ {d.pendencias.semEscopo} lançamento(s) do mês sem PF/PJ ficaram fora destas contas.{" "}

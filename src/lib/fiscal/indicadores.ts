@@ -2,7 +2,7 @@ import { and, eq, gte, sql } from "drizzle-orm";
 import { hojeBrasil, primeiroDoMes, somarDias } from "../datas";
 import type { Db } from "../db";
 import { clientes, compromissos, notasFiscais } from "../db/schema";
-import { obterPerfilFiscal, type PerfilFiscal } from "./perfil";
+import { meiAte, obterPerfilFiscal, regimeNoMes, type PerfilFiscal } from "./perfil";
 import { diagnosticarFatorR, type DiagnosticoFatorR } from "./simples";
 
 export interface ReceitaMensal {
@@ -53,11 +53,32 @@ export interface IndicadoresFiscais {
   mesesComDados: number;
   receitaMesAtualCentavos: number;
   diagnostico: DiagnosticoFatorR;
+  /** Enquadramento no mês atual e até quando foi MEI (se foi). */
+  regimeAtual: "mei" | "simples";
+  meiAte: string | null;
+  /** Meses, dos 12 anteriores, com pró-labore na folha do Fator R. */
+  mesesDeFolha: number;
+  /** Fator R se o pró-labore atual valesse os 12 meses (o que vai acontecer quando completar 12 meses). */
+  fatorRPleno: number;
+  /** Primeiro mês em que a folha terá 12 meses de pró-labore (null se já tem). */
+  folhaCompletaEm: string | null;
+}
+
+/** Primeiro mês da folha: o informado em "pró-labore desde" ou, se a empresa foi MEI, o início como ME. */
+export function inicioDaFolha(perfil: PerfilFiscal): string | null {
+  if (perfil.proLaboreDesde) return perfil.proLaboreDesde;
+  const fim = meiAte(perfil);
+  if (!fim) return null;
+  const [a, m] = fim.split("-").map(Number);
+  return new Date(Date.UTC(a, m, 1)).toISOString().slice(0, 7);
 }
 
 /**
  * Fator R e DAS estimado do mês corrente. RBT12 = receita dos 12 meses anteriores ao mês atual
- * (regra do Simples). A folha usa o pró-labore cadastrado × 12.
+ * (regra do Simples; a receita do período MEI entra, pois é o mesmo CNPJ). A folha soma o
+ * pró-labore cadastrado só nos meses em que ele existia (MEI não tem pró-labore): logo depois de
+ * sair do MEI o Fator R fica baixo até completar 12 meses. Confirme com a contabilidade como o
+ * PGDAS-D está tratando o período — esta tela é para planejar.
  */
 export async function indicadoresFiscais(db: Db): Promise<IndicadoresFiscais> {
   const perfil = await obterPerfilFiscal(db);
@@ -65,12 +86,19 @@ export async function indicadoresFiscais(db: Db): Promise<IndicadoresFiscais> {
   const anteriores = serie.slice(0, 12);
   const atual = serie[12];
   const rbt12 = anteriores.reduce((s, m) => s + m.valorCentavos, 0);
+  const inicio = inicioDaFolha(perfil);
+  const mesesDeFolha = anteriores.filter((m) => !inicio || m.mes >= inicio).length;
   const diagnostico = diagnosticarFatorR({
     rbt12Centavos: rbt12,
-    folha12Centavos: perfil.proLaboreMensalCentavos * 12,
+    folha12Centavos: perfil.proLaboreMensalCentavos * mesesDeFolha,
     receitaDoMesCentavos: atual.valorCentavos,
     proLaboreMensalCentavos: perfil.proLaboreMensalCentavos,
   });
+  let folhaCompletaEm: string | null = null;
+  if (inicio && mesesDeFolha < 12) {
+    const [a, m] = inicio.split("-").map(Number);
+    folhaCompletaEm = new Date(Date.UTC(a, m - 1 + 12, 1)).toISOString().slice(0, 7);
+  }
   return {
     perfil,
     receitaMensal: serie,
@@ -78,6 +106,11 @@ export async function indicadoresFiscais(db: Db): Promise<IndicadoresFiscais> {
     mesesComDados: anteriores.filter((m) => m.valorCentavos > 0).length,
     receitaMesAtualCentavos: atual.valorCentavos,
     diagnostico,
+    regimeAtual: regimeNoMes(perfil, atual.mes),
+    meiAte: meiAte(perfil),
+    mesesDeFolha,
+    fatorRPleno: rbt12 > 0 ? (perfil.proLaboreMensalCentavos * 12) / rbt12 : 0,
+    folhaCompletaEm,
   };
 }
 

@@ -3,6 +3,23 @@
 Todas as mudanças relevantes do app, da mais recente para a mais antiga. O formato segue
 [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e as versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.8.0] — 2026-11-04
+
+### Adicionado
+- **Retiradas reconhecidas pelo seu nome/CPF e pelo nome da empresa** (Configurações → "Como você e a empresa aparecem nos
+  Pix"): Pix da empresa para você vira retirada (a definir: pró-labore ou lucro), Pix seu para a empresa vira aporte,
+  mesmo com só um dos extratos importado. Ao salvar, as transações já importadas são revistas; há também o botão
+  **Procurar retiradas nas transações**.
+- **Enquadramento da empresa** (Configurações): "Foi MEI até" e "Pró-labore desde". O Fator R passa a usar a folha real
+  (o MEI não tem pró-labore), mostra quantos meses de folha existem e qual será o Fator R ao completar 12 meses; nos meses
+  de MEI, o DAS é o fixo do MEI. O consultor e os avisos levam isso em conta.
+- **Cartões virtuais e adicionais** vinculados ao cartão físico: cadastro, ativo/cancelado, finais lidos da fatura (cada
+  compra mostra o final usado), uso em 90 dias por virtual e aviso de **assinatura cobrada num virtual cancelado**.
+
+### Corrigido
+- Painel da empresa: "Foi para você" ficava zerado quando o Pix para o sócio só aparecia de um lado (era contado como
+  despesa da empresa). O painel agora avisa quando nenhuma retirada foi encontrada e como resolver.
+
 ## [0.7.0] — 2026-11-04
 
 ### Adicionado

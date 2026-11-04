@@ -177,6 +177,8 @@ export async function listarTransacoes(db: Db, f: FiltroTransacoes) {
       revisar: transacoes.revisar,
       parcelaAtual: transacoes.parcelaAtual,
       parcelaTotal: transacoes.parcelaTotal,
+      finalCartao: transacoes.finalCartao,
+      contaFinal: contas.finalCartao,
       contaId: transacoes.contaId,
       contaApelido: contas.apelido,
       contaEscopo: contas.escopoPadrao,

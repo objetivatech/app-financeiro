@@ -5,8 +5,11 @@ import { dadosDasEmpresas, type DadosEmpresa } from "./cnpj";
 import { classificarPorCnae, classificarPorEstabelecimento, classificarPorHistorico, indiceDoHistorico } from "./enriquecimento";
 import { iaDisponivel } from "../ia/cliente";
 import { classificarComIa } from "./ia";
+import { normalizarTexto } from "../importacao/util";
+import { obterIdentidade } from "./identidade";
 import {
   aplicar,
+  aplicarIdentidade,
   aplicarEscopoDaConta,
   aplicarHeuristicas,
   aplicarRegras,
@@ -31,6 +34,7 @@ function paraClassificavel(t: Transacao): TransacaoClassificavel {
     descricaoNormalizada: t.descricaoNormalizada,
     valorCentavos: t.valorCentavos,
     documentoContraparte: t.documentoContraparte,
+    nomeContraparteNormalizado: t.nomeContraparte ? normalizarTexto(t.nomeContraparte) : null,
     escopo: t.escopo,
     categoriaId: t.categoriaId,
     natureza: t.natureza,
@@ -124,6 +128,10 @@ export async function classificarPendentes(
     aplicarRegras(t, regrasCtx);
   }
   resumo.transferencias = parearTransferencias([...porId.values()], mapaContas, documentos);
+
+  // Retiradas e aportes com só um lado no app (Pix para o seu nome/CPF, ou vindo da empresa).
+  const identidade = await obterIdentidade(db);
+  for (const t of pendentes) aplicarIdentidade(t, mapaContas.get(t.contaId)!, identidade);
 
   // Classificadores complementares (antes da IA, de graça): histórico, estabelecimentos e CNPJ.
   const aindaSem = pendentes.filter((t) => !t.categoriaId && t.natureza === "comum");
@@ -259,4 +267,38 @@ export async function reabrirClassificacaoDaConta(db: Db, contaId: number): Prom
     // A outra perna da transferência também precisa ser refeita (se não foi definida à mão).
     await db.update(transacoes).set(limpar).where(and(inArray(transacoes.id, pares), automatica));
   }
+}
+
+/**
+ * Refaz o reconhecimento de retiradas e aportes nas transações que já existem (ex.: depois de você
+ * informar seu nome em Configurações). Só mexe no que foi classificado automaticamente e não está
+ * pareado; o que você corrigiu à mão ou por regra fica como está.
+ */
+export async function reaplicarIdentidade(db: Db): Promise<number> {
+  const identidade = await obterIdentidade(db);
+  if (identidade.nomesSocio.length + identidade.docsSocio.size + identidade.nomesEmpresa.length + identidade.docsEmpresa.size === 0) return 0;
+  const [listaContas, candidatas] = await Promise.all([
+    db.query.contas.findMany(),
+    db.query.transacoes.findMany({
+      where: and(
+        isNull(transacoes.parTransferenciaId),
+        or(isNull(transacoes.classificadoPor), inArray(transacoes.classificadoPor, ["conta", "ia", "heuristica"])),
+        inArray(transacoes.natureza, ["comum", "pro_labore", "distribuicao_lucros", "despesa_pessoal_na_pj", "despesa_pj_na_pf"]),
+      ),
+    }),
+  ]);
+  const mapaContas = new Map<number, ContaContexto>(listaContas.map((c) => [c.id, { id: c.id, tipo: c.tipo, escopoPadrao: c.escopoPadrao }]));
+  let alteradas = 0;
+  for (const original of candidatas) {
+    const t = paraClassificavel(original);
+    // A IA pode ter marcado o Pix para você como "gasto pessoal pago pela empresa": parte do zero.
+    if (t.natureza === "despesa_pessoal_na_pj" || t.natureza === "despesa_pj_na_pf") t.natureza = "comum";
+    if (!aplicarIdentidade(t, mapaContas.get(t.contaId)!, identidade)) continue;
+    await db
+      .update(transacoes)
+      .set({ escopo: t.escopo, categoriaId: t.categoriaId, natureza: t.natureza, classificadoPor: t.classificadoPor, revisar: t.revisar, motivo: t.motivo, confianca: t.confianca })
+      .where(eq(transacoes.id, t.id));
+    alteradas++;
+  }
+  return alteradas;
 }

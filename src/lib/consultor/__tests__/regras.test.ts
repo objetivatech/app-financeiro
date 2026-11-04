@@ -177,3 +177,17 @@ describe("simulações", async () => {
     expect(simularMeta({ valorMetaCentavos: 1_200_000, prazoMeses: 12, rendimentoMensal: 0 }).aporteNecessarioCentavos).toBe(100_000);
   });
 });
+
+describe("cartão virtual cancelado", () => {
+  it("avisa da assinatura que estava no virtual", () => {
+    const r = retrato({
+      vinculadosCancelados: [{ contaId: 7, contaApelido: "Nubank · Cartão", apelido: "Virtual assinaturas", final: "4321", canceladoEm: "2026-11-01" }],
+      transacoes: [
+        tx({ contaId: 7, data: "2026-09-12", descricao: "SPOTIFY", descricaoNormalizada: "SPOTIFY BR", valorCentavos: -2_190, finalCartao: "4321" }),
+        tx({ id: 555, contaId: 7, data: "2026-10-12", descricao: "SPOTIFY", descricaoNormalizada: "SPOTIFY BR", valorCentavos: -2_190, finalCartao: "4321" }),
+      ],
+    });
+    const a = detectarAlertas(r).find((x) => x.chave.startsWith("virtual_cancelado:7:4321"));
+    expect(a).toMatchObject({ gravidade: "atencao", transacaoId: 555 });
+  });
+});

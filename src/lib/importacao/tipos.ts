@@ -25,6 +25,8 @@ export interface TransacaoExtraida {
   documentoContraparte?: string;
   /** Nome da contraparte quando o extrato separa (ex.: Pix recebido de FULANO). */
   nomeContraparte?: string;
+  /** Fatura de cartão: final do cartão que fez a compra (físico, virtual ou adicional), se a fatura separa. */
+  finalCartao?: string;
   /** Parcela "3/10" em compras parceladas de cartão. */
   parcela?: { atual: number; total: number };
   /** Classificação já conhecida pela origem (integrações), gravada como heurística. */

@@ -50,6 +50,13 @@
       "when": 1793799952288,
       "tag": "0006_consultor_avisos",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793804514805,
+      "tag": "0007_cartoes_vinculados",
+      "breakpoints": true
     }
   ]
 }

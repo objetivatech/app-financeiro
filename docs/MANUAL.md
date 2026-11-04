@@ -140,6 +140,12 @@ O negócio olhado sozinho.
 Também mostra despesas por categoria, os últimos 6 meses (receita, resultado e o que foi para você), dívidas e cartões da
 empresa.
 
+> **"Foi para você" zerado?** O app reconhece o dinheiro da empresa para você quando (1) as duas pontas da transferência
+> estão importadas (conta da empresa e sua conta pessoal), (2) a descrição cita pró-labore/lucros, ou (3) o Pix cita **o seu
+> nome/CPF ou o nome da empresa**, que você informa em [Configurações](#configuracoes). Sem isso, um Pix para você parece
+> despesa da empresa. Depois de informar, use **Procurar retiradas nas transações** — o app revê o que já foi importado
+> (sem mexer no que você corrigiu à mão).
+
 <a id="indicadores"></a>
 
 ## Indicadores
@@ -366,6 +372,17 @@ gasto: as compras já foram contadas). Sem o PDF, use **Lançar fatura à mão**
   jogado fora.
 - As parcelas futuras entram no [Fluxo de caixa](#fluxo) no dia de vencimento do cartão.
 
+### Cartões virtuais e adicionais
+
+Compras feitas com um **cartão virtual** (ou um adicional) caem na **mesma fatura** do cartão físico. Em **Cartões →
+Cartões virtuais e adicionais**, cadastre o final de cada um (tipo, final e um nome, como "Virtual assinaturas"). Os
+finais que aparecem nas faturas entram sozinhos ali. Com isso:
+
+- a fatura vai para o cartão certo mesmo se o app ler o final de um virtual;
+- cada compra mostra o final usado ("cartão final 4321") e a lista mostra quanto cada virtual comprou em 90 dias;
+- ao cancelar um virtual no app do banco, clique em **marcar como cancelado**: se havia **assinatura** cobrada nele, o
+  consultor avisa para você trocar o cartão no serviço antes da próxima cobrança.
+
 > **Cartão Asaas:** a API do Asaas não informa a fatura nem as compras do cartão — só o pagamento da fatura sai no
 > extrato da conta. Para ter as parcelas, envie a fatura (ou cadastre a compra parcelada como dívida, como explicado
 > acima).
@@ -416,6 +433,17 @@ contabilidade; esta tela serve para planejar.
 
 > Enquanto o histórico não tiver 12 meses de receita registrada, a RBT12 e o Fator R ficam distorcidos. A primeira
 > sincronização do Asaas já traz 13 meses de notas.
+
+### Saída do MEI
+
+Se a empresa foi MEI (informe **Foi MEI até** em [Configurações](#configuracoes)):
+
+- A **receita do período MEI entra na RBT12** (é o mesmo CNPJ).
+- O **MEI não tem pró-labore**: a folha do Fator R soma o pró-labore só a partir do início como ME (ou do mês informado em
+  **Pró-labore desde**). Logo depois da saída do MEI, o Fator R fica mais baixo; a tela mostra quantos meses de folha
+  existem, quando completa 12 e qual será o Fator R com o pró-labore atual nos 12 meses.
+- Nos meses de MEI o DAS é o valor fixo do MEI, não o percentual do Simples.
+- Esta é uma estimativa para planejar: **confirme com a contabilidade** como o PGDAS-D está tratando os meses de MEI.
 
 <a id="importar"></a>
 
@@ -492,6 +520,12 @@ Traz automaticamente, só lendo (o app nunca cria cobranças nem movimenta dinhe
 
 - **Dados financeiros e fiscais:** pró-labore mensal (base do Fator R e do INSS), custo fixo mensal da empresa (base
   da reserva de caixa), e-mail para os resumos e se a atividade principal está sujeita ao Fator R.
+- **Enquadramento da empresa:** **Foi MEI até** (mês) — o mês seguinte passa a ser o início como ME no Simples — e
+  **Pró-labore desde** (mês). Veja [Impostos](#impostos).
+- **Como você e a empresa aparecem nos Pix:** seu nome, CPF (opcional; fica só no banco do app, nunca vai para a IA) e os
+  nomes da empresa (razão social; nome fantasia). Com eles, o app reconhece **retiradas** (empresa → você), **aportes**
+  (você → empresa) e transferências entre contas da empresa mesmo quando só um dos extratos foi importado. Ao salvar,
+  as transações já importadas são revistas; o botão **Procurar retiradas nas transações** faz isso na hora.
 - **Sobre você e sua empresa:** texto livre usado pela IA para classificar e aconselhar melhor.
 - **Inteligência artificial:** modelos usados, gasto estimado no mês e o que é enviado (CPF/CNPJ nunca vão na
   classificação nem nas dicas). Veja [Custo da IA](#custos-ia).
