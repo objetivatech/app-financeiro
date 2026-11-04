@@ -1,3 +1,4 @@
+import { BotaoEnviar, Formulario } from "@/components/formulario";
 import { LinkAjuda } from "@/components/link-ajuda";
 import { connection } from "next/server";
 import Link from "next/link";
@@ -86,10 +87,10 @@ async function Conteudo({ searchParams }: { searchParams: Busca }) {
       </form>
 
       {pendentesSemCategoria > 0 && iaDisponivel() && (
-        <form action={reclassificarComIa} className="flex items-center gap-3 text-sm">
+        <Formulario acao={reclassificarComIa} retornoEmLinha className="flex flex-wrap items-center gap-3 text-sm">
           <span className="text-suave">{pendentesSemCategoria} transação(ões) sem categoria nesta lista.</span>
-          <Botao type="submit">Classificar com IA</Botao>
-        </form>
+          <BotaoEnviar pendente="Iniciando…">Classificar com IA</BotaoEnviar>
+        </Formulario>
       )}
 
       <Cartao className="overflow-x-auto p-0">

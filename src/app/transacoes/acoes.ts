@@ -4,7 +4,8 @@ import { and, eq, isNull, ne, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { atualizarAlertas } from "@/lib/consultor/alertas";
 import { CATEGORIAS_PADRAO } from "@/lib/classificacao/categorias";
-import { classificarPendentes } from "@/lib/classificacao/executar";
+import type { RetornoAcao } from "@/components/formulario";
+import { classificarPendentes, reclassificarEmSegundoPlano, reclassificandoEmSegundoPlano } from "@/lib/classificacao/executar";
 import { obterDb } from "@/lib/db";
 import { NATUREZAS, regras, transacoes, type Natureza } from "@/lib/db/schema";
 import { normalizarTexto } from "@/lib/importacao/util";
@@ -20,7 +21,7 @@ function lerNatureza(v: FormDataEntryValue | null): Natureza {
 }
 
 /** O usuário corrige uma transação; opcionalmente vira regra para as parecidas. */
-export async function salvarClassificacao(formData: FormData) {
+export async function salvarClassificacao(formData: FormData): Promise<RetornoAcao> {
   const db = obterDb();
   const id = Number(formData.get("id"));
   const escopo = lerEscopo(formData.get("escopo"));
@@ -33,7 +34,7 @@ export async function salvarClassificacao(formData: FormData) {
     .set({ escopo, categoriaId, natureza, classificadoPor: "usuario", revisar: false, motivo: "Definido por você", confianca: 1 })
     .where(eq(transacoes.id, id))
     .returning();
-  if (!atual) return;
+  if (!atual) return { erro: "Transação não encontrada (talvez a conta tenha sido excluída). Recarregue a página." };
 
   // Numa transferência entre contas próprias, a natureza vale para as duas pernas.
   if (atual.parTransferenciaId) {
@@ -73,7 +74,7 @@ export async function salvarClassificacao(formData: FormData) {
   revalidatePath("/");
 }
 
-export async function marcarRevisada(formData: FormData) {
+export async function marcarRevisada(formData: FormData): Promise<RetornoAcao> {
   const db = obterDb();
   await db.update(transacoes).set({ revisar: false }).where(eq(transacoes.id, Number(formData.get("id"))));
   await atualizarAlertas(obterDb(), { atualizarCompromissos: false }).catch(() => undefined);
@@ -81,10 +82,11 @@ export async function marcarRevisada(formData: FormData) {
   revalidatePath("/");
 }
 
-export async function reclassificarComIa() {
+/** A IA pode levar minutos: roda em segundo plano e a tela avisa enquanto isso. */
+export async function reclassificarComIa(): Promise<RetornoAcao> {
   const db = obterDb();
-  await classificarPendentes(db);
-  await atualizarAlertas(obterDb(), { atualizarCompromissos: false }).catch(() => undefined);
+  const jaRodando = reclassificandoEmSegundoPlano();
+  reclassificarEmSegundoPlano(db, () => atualizarAlertas(db, { atualizarCompromissos: false }));
   revalidatePath("/transacoes");
-  revalidatePath("/");
+  return { ok: jaRodando ? "Já estava classificando; uma nova rodada começa ao final." : "Classificação iniciada em segundo plano. Recarregue a página em alguns minutos." };
 }

@@ -247,7 +247,7 @@ Lista tudo o que entrou e saiu, com filtros por mês, conta, escopo, texto e "s�
 - **está certo** confirma a classificação.
 - **corrigir** abre a edição: de quem é (PF/PJ), categoria e natureza. Marque **"Aplicar a todas que contêm…"** para
   criar uma regra: ela vale para as transações parecidas que já existem e para as que vierem.
-- **Classificar com IA** aparece quando há transações sem categoria.
+- **Classificar com IA** aparece quando há transações sem categoria. Roda em segundo plano: recarregue a página em alguns minutos para ver o resultado.
 - Quando o consultor tem algo a dizer sobre uma transação (mistura, retirada sem definição, gasto fora do padrão,
   assinatura nova…), a mensagem aparece embaixo dela, com o que fazer e o atalho **perguntar**.
 

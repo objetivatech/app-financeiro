@@ -4,7 +4,8 @@ import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { alternarVinculado, excluirFatura, excluirVinculado, registrarFatura, salvarVinculado } from "@/lib/cartoes/servico";
 import { atualizarAlertas } from "@/lib/consultor/alertas";
-import { classificarPendentes, reabrirClassificacaoDaConta } from "@/lib/classificacao/executar";
+import type { RetornoAcao } from "@/components/formulario";
+import { reabrirClassificacaoDaConta, reclassificarEmSegundoPlano } from "@/lib/classificacao/executar";
 import { atualizarCompromissos } from "@/lib/compromissos/servico";
 import { obterDb } from "@/lib/db";
 import { contas } from "@/lib/db/schema";
@@ -53,7 +54,7 @@ export async function salvarCartao(_: Estado, fd: FormData): Promise<Estado> {
     await db.update(contas).set(dados).where(eq(contas.id, id));
     if (atual.escopoPadrao !== escopo) {
       await reabrirClassificacaoDaConta(db, id);
-      await classificarPendentes(db);
+      reclassificarEmSegundoPlano(db, () => atualizarAlertas(db, { atualizarCompromissos: false }));
     }
   } else {
     const instituicao = obterInstituicao(texto(fd, "instituicaoId") || undefined);
@@ -83,31 +84,36 @@ export async function lancarFatura(_: Estado, fd: FormData): Promise<Estado> {
   return { ok: "Fatura lançada: já aparece em A pagar e no fluxo de caixa." };
 }
 
-export async function removerFatura(fd: FormData) {
+export async function removerFatura(fd: FormData): Promise<RetornoAcao> {
   await excluirFatura(obterDb(), Number(fd.get("id")));
   atualizarTelas();
+  return { ok: "Fatura excluída." };
 }
 
 /** Cadastra (ou renomeia) um cartão virtual ou adicional de um cartão. */
-export async function novoVinculado(fd: FormData) {
+export async function novoVinculado(fd: FormData): Promise<RetornoAcao> {
   const contaId = Number(fd.get("contaId"));
   const final = String(fd.get("final") ?? "").replace(/\D/g, "").slice(-4);
-  if (!contaId || final.length < 4) return;
+  if (!contaId) return { erro: "Cartão não encontrado. Recarregue a página." };
+  if (final.length < 4) return { erro: "Informe os 4 últimos dígitos do cartão virtual ou adicional." };
   const tipo = fd.get("tipo") === "adicional" ? "adicional" : "virtual";
   const apelido = String(fd.get("apelido") ?? "").trim().slice(0, 60) || `${tipo === "virtual" ? "Virtual" : "Adicional"} final ${final}`;
   await salvarVinculado(obterDb(), { contaId, final, tipo, apelido });
   atualizarTelas();
+  return { ok: `${apelido} cadastrado.` };
 }
 
-export async function alternarCartaoVinculado(fd: FormData) {
+export async function alternarCartaoVinculado(fd: FormData): Promise<RetornoAcao> {
   const db = obterDb();
   await alternarVinculado(db, Number(fd.get("id")), fd.get("ativo") === "1");
   // Cancelar um virtual pode deixar assinaturas sem cartão: o consultor confere.
   await atualizarAlertas(db, { atualizarCompromissos: false }).catch(() => undefined);
   atualizarTelas();
+  return null;
 }
 
-export async function removerCartaoVinculado(fd: FormData) {
+export async function removerCartaoVinculado(fd: FormData): Promise<RetornoAcao> {
   await excluirVinculado(obterDb(), Number(fd.get("id")));
   atualizarTelas();
+  return null;
 }

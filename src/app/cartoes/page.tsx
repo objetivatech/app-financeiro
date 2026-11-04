@@ -1,3 +1,4 @@
+import { BotaoEnviar, Formulario } from "@/components/formulario";
 import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
@@ -229,21 +230,25 @@ function CartaoDetalhe({ c, contas, emissores }: { c: ResumoCartao; contas: { id
                   )}
                 </span>
                 <span className="flex gap-3 text-xs">
-                  <form action={alternarCartaoVinculado}>
+                  <Formulario acao={alternarCartaoVinculado} mensagemOk={null} retornoEmLinha>
                     <input type="hidden" name="id" value={v.id} />
                     <input type="hidden" name="ativo" value={v.ativo ? "0" : "1"} />
-                    <button className="underline">{v.ativo ? "marcar como cancelado" : "reativar"}</button>
-                  </form>
-                  <form action={removerCartaoVinculado}>
+                    <BotaoEnviar variante="link" pendente="salvando…">
+                      {v.ativo ? "marcar como cancelado" : "reativar"}
+                    </BotaoEnviar>
+                  </Formulario>
+                  <Formulario acao={removerCartaoVinculado} mensagemOk={null} retornoEmLinha>
                     <input type="hidden" name="id" value={v.id} />
-                    <button className="text-suave underline hover:text-negativo">remover</button>
-                  </form>
+                    <BotaoEnviar variante="link" pendente="removendo…" className="text-suave hover:text-negativo">
+                      remover
+                    </BotaoEnviar>
+                  </Formulario>
                 </span>
               </li>
             ))}
           </ul>
         )}
-        <form action={novoVinculado} className="mt-3 flex flex-wrap items-end gap-2 text-sm">
+        <Formulario acao={novoVinculado} className="mt-3 flex flex-wrap items-end gap-2 text-sm">
           <input type="hidden" name="contaId" value={k.id} />
           <label className="grid gap-1">
             <span className="text-xs text-suave">Tipo</span>
@@ -260,8 +265,8 @@ function CartaoDetalhe({ c, contas, emissores }: { c: ResumoCartao; contas: { id
             <span className="text-xs text-suave">Nome (opcional)</span>
             <input name="apelido" placeholder="Ex.: Virtual assinaturas" className={estiloCampo} />
           </label>
-          <button className="rounded-md border border-borda px-3 py-1.5 hover:border-foreground/30">Adicionar</button>
-        </form>
+          <BotaoEnviar pendente="Adicionando…">Adicionar</BotaoEnviar>
+        </Formulario>
       </details>
 
       {c.faturas.length > 0 && (
@@ -278,10 +283,12 @@ function CartaoDetalhe({ c, contas, emissores }: { c: ResumoCartao; contas: { id
                     {f.minimoCentavos ? ` · mínimo ${formatarMoeda(f.minimoCentavos)}` : ""}
                   </span>
                 </span>
-                <form action={removerFatura}>
+                <Formulario acao={removerFatura} mensagemOk={null} retornoEmLinha className="text-xs">
                   <input type="hidden" name="id" value={f.id} />
-                  <button className="text-xs text-suave underline hover:text-negativo">remover</button>
-                </form>
+                  <BotaoEnviar variante="link" pendente="removendo…" className="text-suave hover:text-negativo">
+                    remover
+                  </BotaoEnviar>
+                </Formulario>
               </li>
             ))}
           </ul>

@@ -1,8 +1,9 @@
+import { BotaoEnviar, Formulario } from "@/components/formulario";
 import { LinkAjuda } from "@/components/link-ajuda";
 import { connection } from "next/server";
 import Link from "next/link";
 import { Suspense } from "react";
-import { Botao, Cartao, Carregando, estiloCampo, SeloEscopo, Valor } from "@/components/ui";
+import { Cartao, Carregando, estiloCampo, SeloEscopo, Valor } from "@/components/ui";
 import { listarContas } from "@/lib/consultas";
 import { obterDb } from "@/lib/db";
 import { formatarData, ROTULOS_TIPO_CONTA } from "@/lib/formato";
@@ -76,7 +77,7 @@ async function Lista() {
           </div>
           <details>
             <summary className="cursor-pointer text-sm underline">editar</summary>
-            <form action={salvarConta} className="mt-3 grid gap-2 text-sm">
+            <Formulario acao={salvarConta} className="mt-3 grid gap-2 text-sm">
               <input type="hidden" name="id" value={c.id} />
               <label className="grid gap-1">
                 <span className="text-xs text-suave">Apelido</span>
@@ -115,16 +116,18 @@ async function Lista() {
                 </label>
               </div>
               <div>
-                <Botao type="submit">Salvar</Botao>
+                <BotaoEnviar>Salvar</BotaoEnviar>
               </div>
-            </form>
-            <form action={excluirConta} className="mt-4 flex items-center gap-2 border-t border-borda pt-3 text-xs">
+            </Formulario>
+            <Formulario acao={excluirConta} retornoEmLinha className="mt-4 flex flex-wrap items-center gap-2 border-t border-borda pt-3 text-xs">
               <input type="hidden" name="id" value={c.id} />
               <label className="flex items-center gap-1.5 text-suave">
                 <input type="checkbox" name="confirmar" /> Excluir esta conta e todas as transações dela
               </label>
-              <button className="text-negativo underline">excluir</button>
-            </form>
+              <BotaoEnviar variante="link" pendente="excluindo…" className="text-negativo">
+                excluir
+              </BotaoEnviar>
+            </Formulario>
           </details>
         </Cartao>
       ))}

@@ -1,3 +1,4 @@
+import { BotaoEnviar, Formulario } from "@/components/formulario";
 import { asc, eq } from "drizzle-orm";
 import { connection } from "next/server";
 import { Suspense } from "react";
@@ -74,13 +75,15 @@ async function Conteudo() {
         </div>
       ))}
       {lembretes.map((l) => (
-        <form key={l.compromissoId} action={lembreteFeito} className="flex flex-wrap items-center gap-3 rounded-md border border-alerta/40 bg-alerta/10 p-3 text-sm">
+        <Formulario key={l.compromissoId} acao={lembreteFeito} mensagemOk={null} retornoEmLinha className="flex flex-wrap items-center gap-3 rounded-md border border-alerta/40 bg-alerta/10 p-3 text-sm">
           <input type="hidden" name="id" value={l.compromissoId} />
           <span>
             📎 <strong>{l.descricao}</strong> paga em {formatarData(l.dataPagamento)}: {l.lembrete}
           </span>
-          <button className="underline">feito</button>
-        </form>
+          <BotaoEnviar variante="link" pendente="salvando…">
+            feito
+          </BotaoEnviar>
+        </Formulario>
       ))}
 
       <div className="grid gap-3 md:grid-cols-4">
@@ -119,10 +122,12 @@ async function Conteudo() {
                   <span>
                     {formatarData(p.dataPagamento!)} · {p.descricao} · <Valor centavos={p.valorCentavos} />
                   </span>
-                  <form action={desfazer}>
+                  <Formulario acao={desfazer} mensagemOk={null} retornoEmLinha className="text-xs">
                     <input type="hidden" name="id" value={p.id} />
-                    <button className="text-xs text-suave underline">desfazer</button>
-                  </form>
+                    <BotaoEnviar variante="link" pendente="desfazendo…" className="text-suave">
+                      desfazer
+                    </BotaoEnviar>
+                  </Formulario>
                 </li>
               ))}
             </ul>
@@ -154,10 +159,12 @@ async function Conteudo() {
                   <SeloEscopo escopo={r.escopo} /> Dia {r.diaVencimento} · {r.descricao} · {r.tipo === "receber" ? "entra" : "sai"}{" "}
                   <Valor centavos={r.valorCentavos} />
                 </span>
-                <form action={encerrarRecorrencia}>
+                <Formulario acao={encerrarRecorrencia} mensagemOk={null} retornoEmLinha className="text-xs">
                   <input type="hidden" name="id" value={r.id} />
-                  <button className="text-xs text-suave underline">encerrar</button>
-                </form>
+                  <BotaoEnviar variante="link" pendente="encerrando…" className="text-suave">
+                    encerrar
+                  </BotaoEnviar>
+                </Formulario>
               </li>
             ))}
           </ul>
@@ -216,11 +223,13 @@ function TabelaPagar({ itens, hoje }: { itens: ItemAPagar[]; hoje: string }) {
             <td className="pr-2 text-suave">{ROTULO_ORIGEM[p.origem] ?? p.origem}</td>
             <td className="text-right"><Valor centavos={p.valorCentavos} /></td>
             <td className="text-right">
-              <form action={pagar} className="inline-flex items-center gap-1">
+              <Formulario acao={pagar} mensagemOk={null} retornoEmLinha className="inline-flex flex-wrap items-center justify-end gap-1">
                 <input type="hidden" name="id" value={p.id} />
                 <input type="date" name="data" defaultValue={hoje} className="rounded border border-borda bg-superficie px-1 py-0.5 text-xs" />
-                <button className="text-xs underline">pago</button>
-              </form>
+                <BotaoEnviar variante="link" pendente="salvando…" className="text-xs">
+                  pago
+                </BotaoEnviar>
+              </Formulario>
             </td>
           </tr>
         ))}
@@ -281,13 +290,15 @@ function CartaoDivida({ d }: { d: ResumoDivida }) {
       </dl>
       <details className="mt-2 text-xs">
         <summary className="cursor-pointer text-suave">excluir</summary>
-        <form action={excluirDivida} className="mt-1 flex items-center gap-2">
+        <Formulario acao={excluirDivida} mensagemOk={null} retornoEmLinha className="mt-1 flex flex-wrap items-center gap-2">
           <input type="hidden" name="id" value={d.id} />
           <label className="flex items-center gap-1 text-suave">
             <input type="checkbox" name="confirmar" /> apagar a dívida e todas as parcelas
           </label>
-          <button className="text-negativo underline">excluir</button>
-        </form>
+          <BotaoEnviar variante="link" pendente="excluindo…" className="text-negativo">
+            excluir
+          </BotaoEnviar>
+        </Formulario>
       </details>
     </div>
   );

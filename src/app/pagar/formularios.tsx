@@ -1,5 +1,6 @@
 "use client";
 
+import { seguro } from "@/components/formulario";
 import { useActionState, useState } from "react";
 import { Botao, estiloCampo } from "@/components/ui";
 import { novaContaAvulsa, novaDivida, novaRecorrencia } from "./acoes";
@@ -45,7 +46,7 @@ function SeletorEscopo() {
 }
 
 export function FormularioDivida({ contas }: { contas: Conta[] }) {
-  const [estado, acao, pendente] = useActionState(novaDivida, null);
+  const [estado, acao, pendente] = useActionState(seguro(novaDivida), null);
   const [modo, setModo] = useState<"fixas" | "diferentes" | "selic">("fixas");
   return (
     <form action={acao} className="grid gap-3 md:grid-cols-2">
@@ -161,7 +162,7 @@ export function FormularioDivida({ contas }: { contas: Conta[] }) {
 }
 
 export function FormularioRecorrencia({ contas, categorias }: { contas: Conta[]; categorias: Categoria[] }) {
-  const [estado, acao, pendente] = useActionState(novaRecorrencia, null);
+  const [estado, acao, pendente] = useActionState(seguro(novaRecorrencia), null);
   return (
     <form action={acao} className="grid gap-3 md:grid-cols-3">
       <Campo rotulo="Descrição">
@@ -222,7 +223,7 @@ export function FormularioRecorrencia({ contas, categorias }: { contas: Conta[];
 }
 
 export function FormularioAvulsa({ contas }: { contas: Conta[] }) {
-  const [estado, acao, pendente] = useActionState(novaContaAvulsa, null);
+  const [estado, acao, pendente] = useActionState(seguro(novaContaAvulsa), null);
   return (
     <form action={acao} className="grid gap-3 md:grid-cols-3">
       <Campo rotulo="Descrição">

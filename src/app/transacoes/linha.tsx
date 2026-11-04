@@ -1,7 +1,8 @@
 "use client";
 
+import { BotaoEnviar, Formulario } from "@/components/formulario";
 import { useState, type ReactNode } from "react";
-import { Botao, estiloCampo } from "@/components/ui";
+import { estiloCampo } from "@/components/ui";
 import { CATEGORIAS_PADRAO } from "@/lib/classificacao/categorias";
 import type { TransacaoListada } from "@/lib/consultas";
 import { NATUREZAS } from "@/lib/naturezas";
@@ -79,10 +80,12 @@ export function LinhaTransacao(props: {
         <td className="whitespace-nowrap px-3 py-2 text-right">{props.valor}</td>
         <td className="whitespace-nowrap px-3 py-2 text-right">
           {t.revisar && !editando && (
-            <form action={marcarRevisada} className="inline">
+            <Formulario acao={marcarRevisada} mensagemOk={null} retornoEmLinha className="mr-2 inline">
               <input type="hidden" name="id" value={t.id} />
-              <button className="mr-2 text-xs underline">está certo</button>
-            </form>
+              <BotaoEnviar variante="link" pendente="salvando…" className="text-xs">
+                está certo
+              </BotaoEnviar>
+            </Formulario>
           )}
           <button onClick={() => setEditando((v) => !v)} className="text-xs underline">
             {editando ? "fechar" : "corrigir"}
@@ -92,13 +95,7 @@ export function LinhaTransacao(props: {
       {editando && (
         <tr className="bg-foreground/[0.03]">
           <td colSpan={5} className="px-3 py-3">
-            <form
-              action={async (fd) => {
-                await salvarClassificacao(fd);
-                setEditando(false);
-              }}
-              className="flex flex-wrap items-end gap-2 text-sm"
-            >
+            <Formulario acao={salvarClassificacao} aoConcluir={() => setEditando(false)} className="flex flex-wrap items-end gap-2 text-sm">
               <input type="hidden" name="id" value={t.id} />
               <label className="flex flex-col gap-1">
                 <span className="text-xs text-suave">De quem é</span>
@@ -139,8 +136,8 @@ export function LinhaTransacao(props: {
                   <input type="checkbox" name="regraSoNestaConta" /> só nesta conta
                 </label>
               </div>
-              <Botao type="submit">Salvar</Botao>
-            </form>
+              <BotaoEnviar>Salvar</BotaoEnviar>
+            </Formulario>
           </td>
         </tr>
       )}

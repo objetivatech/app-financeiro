@@ -3,6 +3,17 @@
 Todas as mudanças relevantes do app, da mais recente para a mais antiga. O formato segue
 [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e as versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.9.2] — 2026-11-04
+
+### Corrigido
+- **Botões de salvar sem resposta** (ex.: editar conta em Contas): todos os formulários do app agora mostram
+  "Salvando…" e depois "✓ Salvo" ou o motivo do erro, em vez de não fazer nada. Excluir sem marcar a confirmação avisa
+  o que falta.
+- Trocar uma conta ou cartão de PF/PJ não espera mais a reclassificação (que, com a IA, podia passar do limite de
+  ~100 s da Cloudflare e derrubar o salvamento): ela roda em segundo plano. O mesmo vale para **Classificar com IA**.
+- Atrás da Cloudflare, os formulários podiam ser recusados pelo servidor quando o túnel repassa outro endereço: nova
+  variável `APP_DOMINIO` no `.env` (ver `docs/DEPLOY-VPS.md`).
+
 ## [0.9.1] — 2026-11-04
 
 ### Corrigido

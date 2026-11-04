@@ -1,6 +1,7 @@
+import { BotaoEnviar, Formulario } from "@/components/formulario";
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { Botao, Cartao, Carregando, estiloCampo, SeloEscopo } from "@/components/ui";
+import { Cartao, Carregando, estiloCampo, SeloEscopo } from "@/components/ui";
 import { CATEGORIAS_PADRAO } from "@/lib/classificacao/categorias";
 import { obterPerfil } from "@/lib/classificacao/executar";
 import { obterDb } from "@/lib/db";
@@ -43,7 +44,7 @@ async function Conteudo() {
   return (
     <>
       <Cartao titulo={<>Dados financeiros e fiscais <LinkAjuda secao="configuracoes" /></>}>
-        <form action={salvarDadosFiscais} className="grid gap-3 text-sm md:grid-cols-2">
+        <Formulario acao={salvarDadosFiscais} className="grid gap-3 text-sm md:grid-cols-2">
           <label className="grid gap-1">
             <span className="text-suave">Pró-labore mensal</span>
             <input name="proLabore" defaultValue={fiscal.proLaboreMensalCentavos ? formatarMoeda(fiscal.proLaboreMensalCentavos) : ""} placeholder="R$ 4.500,00" className={estiloCampo} />
@@ -93,21 +94,21 @@ async function Conteudo() {
             </span>
           </label>
           <div className="flex flex-wrap items-center gap-3 md:col-span-2">
-            <Botao type="submit">Salvar</Botao>
+            <BotaoEnviar>Salvar</BotaoEnviar>
             <BotaoRetiradas />
           </div>
-        </form>
+        </Formulario>
       </Cartao>
 
       <Cartao titulo="Sobre você e sua empresa">
-        <form action={salvarPerfil} className="space-y-3">
+        <Formulario acao={salvarPerfil} className="space-y-3">
           <p className="text-sm text-suave">
             A IA usa este texto para classificar melhor e dar dicas que fazem sentido para o seu caso. Conte o que a
             empresa faz, o regime, como você se remunera e quais gastos costumam se misturar.
           </p>
           <textarea name="perfil" defaultValue={perfil} rows={6} placeholder={EXEMPLO_PERFIL} className={`${estiloCampo} w-full`} />
-          <Botao type="submit">Salvar</Botao>
-        </form>
+          <BotaoEnviar>Salvar</BotaoEnviar>
+        </Formulario>
       </Cartao>
 
       <Cartao titulo={<>Inteligência artificial <LinkAjuda secao="custos-ia" /></>}>
@@ -182,10 +183,12 @@ async function Conteudo() {
                   <td className="pr-2 text-suave">{r.natureza ? ROTULOS_NATUREZA[r.natureza] : ""}</td>
                   <td className="pr-2 text-xs text-suave">{r.contaId ? "só numa conta" : "todas as contas"}</td>
                   <td className="text-right">
-                    <form action={excluirRegra}>
+                    <Formulario acao={excluirRegra} mensagemOk={null} retornoEmLinha>
                       <input type="hidden" name="id" value={r.id} />
-                      <button className="text-xs text-negativo underline">excluir</button>
-                    </form>
+                      <BotaoEnviar variante="link" pendente="excluindo…" className="text-xs text-negativo">
+                        excluir
+                      </BotaoEnviar>
+                    </Formulario>
                   </td>
                 </tr>
               ))}

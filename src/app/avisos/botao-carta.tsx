@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { explicarErro } from "@/components/formulario";
 import { gerarCartaAgora } from "./acoes";
 
 /** Pede à IA a carta da semana agora (normalmente ela chega sozinha toda semana). */
@@ -10,7 +11,16 @@ export function BotaoCarta() {
   return (
     <div className="flex items-center gap-2">
       <button
-        onClick={() => iniciar(async () => setEstado(await gerarCartaAgora()))}
+        type="button"
+        onClick={() =>
+          iniciar(async () => {
+            try {
+              setEstado(await gerarCartaAgora());
+            } catch (erro) {
+              setEstado({ erro: explicarErro(erro) });
+            }
+          })
+        }
         disabled={pendente}
         className="rounded-md border border-borda px-3 py-1.5 text-sm hover:border-foreground/30 disabled:opacity-50"
       >

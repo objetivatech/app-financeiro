@@ -1,3 +1,4 @@
+import { BotaoEnviar, Formulario } from "@/components/formulario";
 import Link from "next/link";
 import type { Alerta } from "@/lib/db/schema";
 import { adiarAviso, dispensarAviso } from "@/app/avisos/acoes";
@@ -53,16 +54,18 @@ export function CartaoAviso({ a, compacto = false, acoes = true }: { a: Alerta; 
         )}
         {acoes && (
           <>
-            <form action={adiarAviso}>
+            <Formulario acao={adiarAviso} mensagemOk={null} retornoEmLinha>
               <input type="hidden" name="id" value={a.id} />
-              <button className="text-suave underline hover:text-foreground">lembrar em 7 dias</button>
-            </form>
-            <form action={dispensarAviso}>
+              <BotaoEnviar variante="link" pendente="adiando…" className="text-suave hover:text-foreground">
+                lembrar em 7 dias
+              </BotaoEnviar>
+            </Formulario>
+            <Formulario acao={dispensarAviso} mensagemOk={null} retornoEmLinha>
               <input type="hidden" name="id" value={a.id} />
-              <button className="text-suave underline hover:text-foreground" title="Esta situação não volta a gerar aviso">
+              <BotaoEnviar variante="link" pendente="salvando…" className="text-suave hover:text-foreground" title="Esta situação não volta a gerar aviso">
                 já resolvi / não mostrar
-              </button>
-            </form>
+              </BotaoEnviar>
+            </Formulario>
           </>
         )}
       </div>
