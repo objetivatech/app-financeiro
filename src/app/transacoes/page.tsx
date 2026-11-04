@@ -9,6 +9,7 @@ import { obterDb } from "@/lib/db";
 import { formatarData, ROTULOS_NATUREZA } from "@/lib/formato";
 import { iaDisponivel } from "@/lib/ia/cliente";
 import { reclassificarComIa } from "./acoes";
+import { alertasDasTransacoes } from "@/lib/consultor/alertas";
 import { LinhaTransacao } from "./linha";
 
 type Busca = Promise<Record<string, string | string[] | undefined>>;
@@ -42,6 +43,7 @@ async function Conteudo({ searchParams }: { searchParams: Busca }) {
     listarContas(db),
   ]);
   const pendentesSemCategoria = lista.filter((t) => !t.categoriaId).length;
+  const avisos = await alertasDasTransacoes(db, lista.map((t) => t.id));
 
   return (
     <>
@@ -116,6 +118,7 @@ async function Conteudo({ searchParams }: { searchParams: Busca }) {
                   selo={<SeloEscopo escopo={t.escopo} />}
                   categoriaNome={CATEGORIAS_PADRAO.find((c) => c.id === t.categoriaId)?.nome ?? "Sem categoria"}
                   naturezaNome={t.natureza !== "comum" ? ROTULOS_NATUREZA[t.natureza] : null}
+                  avisos={(avisos.get(t.id) ?? []).map((a) => ({ id: a.id, gravidade: a.gravidade, titulo: a.titulo, recomendacao: a.recomendacao, pergunta: a.pergunta }))}
                 />
               ))}
             </tbody>

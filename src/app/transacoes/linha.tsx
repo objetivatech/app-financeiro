@@ -26,6 +26,8 @@ export function LinhaTransacao(props: {
   selo: ReactNode;
   categoriaNome: string;
   naturezaNome: string | null;
+  /** Avisos do consultor sobre esta transação (mistura, retirada sem definição, gasto fora do padrão...). */
+  avisos?: { id: number; gravidade: "info" | "atencao" | "critico"; titulo: string; recomendacao: string | null; pergunta: string | null }[];
 }) {
   const { t } = props;
   const [editando, setEditando] = useState(false);
@@ -40,6 +42,25 @@ export function LinhaTransacao(props: {
             {t.contaApelido}
             {t.parcelaAtual && t.parcelaTotal ? ` · parcela ${t.parcelaAtual}/${t.parcelaTotal}` : ""}
           </div>
+          {props.avisos?.map((a) => (
+            <div
+              key={a.id}
+              className={`mt-1.5 rounded-md border px-2 py-1 text-xs ${a.gravidade === "info" ? "border-borda" : a.gravidade === "critico" ? "border-negativo/40 bg-negativo/5" : "border-alerta/40 bg-alerta/5"}`}
+            >
+              <span className={a.gravidade === "info" ? "text-suave" : a.gravidade === "critico" ? "text-negativo" : "text-alerta"}>
+                {a.gravidade === "info" ? "Consultor: " : "⚠ Consultor: "}
+              </span>
+              <strong className="font-medium">{a.titulo}.</strong> {a.recomendacao}
+              {a.pergunta && (
+                <>
+                  {" "}
+                  <a href={`/consultor?pergunta=${encodeURIComponent(a.pergunta)}`} className="underline">
+                    perguntar
+                  </a>
+                </>
+              )}
+            </div>
+          ))}
         </td>
         <td className="px-3 py-2">
           <div className="flex items-center gap-1.5">

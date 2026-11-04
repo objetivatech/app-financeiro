@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
-import { Menu, MenuCelular } from "@/components/menu";
+import { Suspense } from "react";
+import { AvisosGlobais, ContadorAvisos } from "@/components/avisos-globais";
+import { BotaoConsultor, Menu, MenuCelular } from "@/components/menu";
 import { version } from "../../package.json";
 import "./globals.css";
 
@@ -29,6 +31,14 @@ function Versao() {
   );
 }
 
+function Contador() {
+  return (
+    <Suspense fallback={null}>
+      <ContadorAvisos />
+    </Suspense>
+  );
+}
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="pt-BR" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
@@ -36,7 +46,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <div className="mx-auto flex min-h-screen max-w-7xl flex-col md:flex-row">
           {/* Celular: menu recolhível no topo */}
           <header className="border-b border-borda bg-superficie md:hidden">
-            <MenuCelular marca={<Marca />} rodape={<Versao />} />
+            <MenuCelular marca={<Marca />} rodape={<Versao />} contadorAvisos={<Contador />} />
           </header>
           {/* Computador: barra lateral fixa */}
           <aside className="hidden w-56 shrink-0 border-r border-borda bg-superficie md:block">
@@ -45,11 +55,15 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
                 <Marca />
                 <Versao />
               </div>
-              <Menu />
+              <Menu contadorAvisos={<Contador />} />
             </div>
           </aside>
-          <main className="min-w-0 flex-1 px-4 py-6 md:px-8">{children}</main>
+          <main className="min-w-0 flex-1 px-4 py-6 pb-20 md:px-8">{children}</main>
         </div>
+        <BotaoConsultor />
+        <Suspense fallback={null}>
+          <AvisosGlobais />
+        </Suspense>
       </body>
     </html>
   );

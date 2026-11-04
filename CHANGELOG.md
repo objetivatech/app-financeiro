@@ -3,6 +3,29 @@
 Todas as mudanças relevantes do app, da mais recente para a mais antiga. O formato segue
 [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e as versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.7.0] — 2026-11-04
+
+### Adicionado
+- **Consultor** (`/consultor`): chat que consulta os seus dados (panorama do mês, gastos, transações, recorrentes,
+  dívidas, cartões, fluxo, impostos e avisos) e faz **simulações** com conta exata — financiamento do carro (Price,
+  seguro, IPVA, manutenção), pró-labore × Fator R, quitação de dívidas (avalanche) e metas. Respostas em tempo real,
+  com o que foi consultado e "O que fazer agora". Conversas salvas. Botão **Consultor** em todas as telas.
+- **Inteligência interna (avisos)**: cerca de 25 regras gratuitas olham cada transação e o fluxo do dinheiro — mistura
+  PF/PJ, retirada sem definição, juros e tarifas evitáveis, gasto fora do padrão, assinatura nova ou mais cara, compra
+  parcelada nova, contas e dívidas vencidas, caixa negativo previsto, reservas baixas, parcelas acima de 30% da renda,
+  retirada acima do resultado, Fator R, limite do cartão, cobranças vencidas, contas sem extrato.
+- Os avisos aparecem numa **janela** ao abrir o app (urgentes e de atenção), **no topo dos painéis**, **junto da
+  transação** e na **Central de avisos** (`/avisos`, com contador no menu); cada um traz o que fazer, atalho para
+  resolver e para perguntar ao consultor. Dá para adiar 7 dias ou dispensar; quando a situação some, o aviso se resolve
+  sozinho.
+- **Carta da semana**: toda semana a IA resume a situação e as 3 prioridades (desliga com `CARTA_SEMANAL=0`).
+- **Skill de gestão financeira** (PF + PJ no Simples): prioridades, referências e boas práticas usadas pelo consultor,
+  pela carta e pelos avisos; visível em "Como o consultor pensa".
+
+### Alterado
+- Painel Consolidado: os alertas soltos do topo viraram os avisos do consultor.
+- Configurações → IA mostra também os modelos do consultor e da carta.
+
 ## [0.6.0] — 2026-11-04
 
 ### Adicionado

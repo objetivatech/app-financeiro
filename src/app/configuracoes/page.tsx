@@ -88,6 +88,8 @@ async function Conteudo() {
                     ["Ler PDFs e fotos", "extracao"],
                     ["Classificar transações", "classificacao"],
                     ["Diagnóstico mensal", "analise"],
+                    ["Consultor (chat)", "consultor"],
+                    ["Carta semanal", "carta"],
                   ] as const
                 ).map(([rotulo, tarefa]) => (
                   <tr key={tarefa} className="border-t border-borda first:border-0">

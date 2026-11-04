@@ -412,3 +412,65 @@ export const empresas = pgTable("empresas", {
   situacao: text("situacao").notNull().default("ok"),
   consultadoEm: timestamp("consultado_em", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const gravidadeAlertaEnum = pgEnum("gravidade_alerta", ["info", "atencao", "critico"]);
+export const statusAlertaEnum = pgEnum("status_alerta", ["ativo", "resolvido", "dispensado"]);
+
+/**
+ * Avisos da inteligência interna (consultor/regras.ts): o que está acontecendo e o que fazer.
+ * `chave` identifica a situação (ex.: "tx:mistura:123", "reserva_pf:2026-11"): a mesma situação não
+ * vira dois avisos, e um aviso dispensado não volta. Quando a situação deixa de existir, o aviso é
+ * resolvido sozinho.
+ */
+export const alertas = pgTable(
+  "alertas",
+  {
+    id: serial("id").primaryKey(),
+    chave: text("chave").notNull().unique(),
+    tipo: text("tipo").notNull(),
+    gravidade: gravidadeAlertaEnum("gravidade").notNull(),
+    escopo: escopoEnum("escopo"),
+    titulo: text("titulo").notNull(),
+    mensagem: text("mensagem").notNull(),
+    recomendacao: text("recomendacao"),
+    /** Tela onde se resolve (ex.: /transacoes?revisar=1). */
+    link: text("link"),
+    /** Pergunta pronta para o consultor aprofundar. */
+    pergunta: text("pergunta"),
+    transacaoId: integer("transacao_id").references(() => transacoes.id, { onDelete: "cascade" }),
+    status: statusAlertaEnum("status").notNull().default("ativo"),
+    /** Quando você viu o aviso na janela de avisos (não volta a abrir sozinho). */
+    vistoEm: timestamp("visto_em", { withTimezone: true }),
+    adiadoAte: date("adiado_ate"),
+    resolvidoEm: timestamp("resolvido_em", { withTimezone: true }),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+    atualizadoEm: timestamp("atualizado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("alertas_status_idx").on(t.status), index("alertas_transacao_idx").on(t.transacaoId)],
+);
+
+export type Alerta = typeof alertas.$inferSelect;
+
+/** Conversas com o consultor (chat). */
+export const conversas = pgTable("conversas", {
+  id: serial("id").primaryKey(),
+  titulo: text("titulo").notNull(),
+  criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  atualizadoEm: timestamp("atualizado_em", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const mensagensConsultor = pgTable(
+  "mensagens_consultor",
+  {
+    id: serial("id").primaryKey(),
+    conversaId: integer("conversa_id")
+      .notNull()
+      .references(() => conversas.id, { onDelete: "cascade" }),
+    papel: text("papel").$type<"usuario" | "consultor">().notNull(),
+    texto: text("texto").notNull(),
+    /** Ferramentas que o consultor usou para responder (nome e resumo), para transparência. */
+    ferramentas: jsonb("ferramentas").$type<string[]>().notNull().default([]),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("mensagens_conversa_idx").on(t.conversaId)],
+);

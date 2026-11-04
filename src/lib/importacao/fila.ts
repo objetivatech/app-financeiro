@@ -1,6 +1,7 @@
 import { eq, inArray, sql } from "drizzle-orm";
 import { classificarPendentes } from "../classificacao/executar";
 import { atualizarCompromissos } from "../compromissos/servico";
+import { atualizarAlertas } from "../consultor/alertas";
 import type { Db } from "../db";
 import { trabalhosImportacao, type TrabalhoImportacao } from "../db/schema";
 import { ErroIa } from "../ia/cliente";
@@ -113,6 +114,8 @@ async function processar(db: Db): Promise<void> {
       if (resumo.erroIa) console.error("Classificação por IA falhou:", resumo.erroIa);
       // Pagamentos que acabaram de entrar podem quitar contas a pagar.
       await atualizarCompromissos(db).catch((erro) => console.error("Falha ao conciliar contas a pagar", erro));
+      // O que entrou pode gerar avisos (mistura, encargos, gasto fora do padrão...) ou resolver outros.
+      await atualizarAlertas(db, { atualizarCompromissos: false }).catch((erro) => console.error("Falha ao atualizar avisos", erro));
     } catch (erro) {
       console.error("Falha ao classificar após importação", erro);
     } finally {

@@ -43,6 +43,13 @@
       "when": 1793751742682,
       "tag": "0005_cartoes_empresas",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793799952288,
+      "tag": "0006_consultor_avisos",
+      "breakpoints": true
     }
   ]
 }

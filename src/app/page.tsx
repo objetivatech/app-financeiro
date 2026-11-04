@@ -14,6 +14,7 @@ import { iaDisponivel } from "@/lib/ia/cliente";
 import { mesDeReferencia } from "@/lib/visoes/consultas";
 import { dadosConsolidado, fluxoDoMes } from "@/lib/visoes/paineis";
 import { periodoDoMes } from "@/lib/consultas";
+import { AvisosDoPainel } from "@/components/avisos-painel";
 import { AnaliseSalva } from "./analise-salva";
 import { BotaoAnalise } from "./botao-analise";
 
@@ -57,16 +58,9 @@ async function Conteudo({ searchParams }: { searchParams: Busca }) {
         <SeletorMes caminho="/" mes={mes} />
       </div>
 
-      {d.dividasEmRisco.map((dv) => (
-        <Link key={dv.id} href="/pagar" className="block rounded-md border border-negativo/50 bg-negativo/10 p-3 text-sm">
-          <strong>⚠ {dv.nome}: parcela atrasada há {dv.diasAtraso} dia(s)</strong> — limite de {dv.diasTolerancia} dias. {dv.consequenciaAtraso}
-        </Link>
-      ))}
-      {d.lembretes.length > 0 && (
-        <Link href="/pagar" className="block rounded-md border border-alerta/40 bg-alerta/10 p-3 text-sm">
-          📎 {d.lembretes.length} lembrete(s) depois de pagar (ex.: enviar comprovante). Ver em A pagar.
-        </Link>
-      )}
+      <Suspense fallback={null}>
+        <AvisosDoPainel limite={3} />
+      </Suspense>
       {d.aPagarSemana.length > 0 && (
         <Link href="/pagar" className="block rounded-md border border-borda bg-superficie p-3 text-sm hover:border-foreground/30">
           A pagar nos próximos 7 dias: <strong>{d.aPagarSemana.length} conta(s)</strong>,{" "}

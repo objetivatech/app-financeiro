@@ -28,6 +28,7 @@ Nenhum desses dados existe pronto em algum lugar: você cria cada um. O arquivo 
 | `APP_USUARIO` / `APP_SENHA` | Login e senha que o navegador vai pedir ao abrir o app. | Você escolhe. Use uma senha forte e diferente das outras. |
 | `ASAAS_API_KEY` | Chave da API do Asaas (leitura de cobranças, notas e extrato). | No Asaas: *Minha conta → Integrações → Chave de API*. Coloque entre aspas simples: `ASAAS_API_KEY='$aact_...'` (a chave começa com `$`). Opcional; sem ela a integração fica desligada. |
 | `CONSULTA_CNPJ` | Opcional. `0` desliga a consulta pública do CNPJ de quem recebeu um pagamento (BrasilAPI), usada para classificar gastos. | Deixe sem definir para manter ligada. Só CNPJ é consultado; CPF nunca. |
+| `MODELO_CONSULTOR` / `CARTA_SEMANAL` | Opcionais. Modelo do chat do consultor (padrão Sonnet 5.5) e `CARTA_SEMANAL=0` para desligar a carta da semana. | Deixe sem definir para usar o padrão. |
 | `CLOUDFLARE_TUNNEL_TOKEN` | Liga a VPS à Cloudflare sem abrir portas. | Gerado no passo 3, ao criar o túnel. Pode deixar vazio por enquanto. |
 
 Sem a `ANTHROPIC_API_KEY` o app funciona com OFX e CSV, mas não lê PDF/fotos nem gera dicas.

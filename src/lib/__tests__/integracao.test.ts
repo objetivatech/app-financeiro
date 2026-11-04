@@ -25,6 +25,10 @@ import { gravarExtrato, importarParaBanco } from "../importacao/persistir";
 import { somarMeses } from "../cartoes/calculo";
 import { registrarFatura, resumoCartoes } from "../cartoes/servico";
 import { visaoConsolidada } from "../visoes/calculo";
+import { alertasDasTransacoes, alertasParaJanela, atualizarAlertas, contarAlertasAtivos, dispensarAlerta, listarAlertasAtivos, marcarVistos } from "../consultor/alertas";
+import { ferramentasDoConsultor } from "../consultor/ferramentas";
+import { listarConversas, mensagensDaConversa, perguntarAoConsultor, type EventoConsultor } from "../consultor/chat";
+import { redefinirClienteIa } from "../ia/cliente";
 import { somasPorMes } from "../visoes/consultas";
 import { dadosConsolidado, dadosPainelPF, dadosPainelPJ } from "../visoes/paineis";
 
@@ -39,7 +43,7 @@ describe.skipIf(!url)("importação + classificação no banco", () => {
     pool = new Pool({ connectionString: url });
     db = drizzle(pool, { schema });
     await migrate(db, { migrationsFolder: "drizzle" });
-    await db.execute(sql`truncate faturas, empresas, notas_fiscais, compromissos, dividas, recorrencias, uso_ia, clientes, integracoes, trabalhos_importacao, transacoes, importacoes, regras, contas, titulares, categorias, configuracoes restart identity cascade`);
+    await db.execute(sql`truncate mensagens_consultor, conversas, alertas, faturas, empresas, notas_fiscais, compromissos, dividas, recorrencias, uso_ia, clientes, integracoes, trabalhos_importacao, transacoes, importacoes, regras, contas, titulares, categorias, configuracoes restart identity cascade`);
     await db.insert(schema.categorias).values(CATEGORIAS_PADRAO);
   });
 
@@ -401,5 +405,138 @@ describe.skipIf(!url)("importação + classificação no banco", () => {
     expect(pj.serie).toHaveLength(6);
     expect(pf.categorias.some((c) => c.categoriaId === "pf_alimentacao")).toBe(true);
     expect(consolidado.posicaoLiquida).toBe(consolidado.caixa + consolidado.aReceber - consolidado.dividasRestantes - consolidado.cartoesAVencer);
+  });
+
+  it("inteligência interna: avisos aparecem, não duplicam, respeitam o dispensado e se resolvem sozinhos", async () => {
+    const pj = (await db.query.contas.findFirst({ where: (c, { eq }) => eq(c.escopoPadrao, "PJ") }))!;
+    const [gasto] = await db
+      .insert(schema.transacoes)
+      .values({ contaId: pj.id, data: hojeBrasil(), descricao: "ZAFFARI LOJA 9", descricaoNormalizada: "ZAFFARI LOJA 9", valorCentavos: -25_000, hashDedup: "aviso-1", escopo: "PF", categoriaId: "pf_mercado", natureza: "despesa_pessoal_na_pj", classificadoPor: "usuario" })
+      .returning();
+    const r1 = await atualizarAlertas(db);
+    expect(r1.ativos).toBeGreaterThan(0);
+    const aviso = await db.query.alertas.findFirst({ where: (a, { eq }) => eq(a.chave, `tx:mistura_pf:${gasto.id}`) });
+    expect(aviso).toMatchObject({ status: "ativo", transacaoId: gasto.id, gravidade: "atencao" });
+    expect((await alertasParaJanela(db)).some((a) => a.id === aviso!.id)).toBe(true);
+    expect((await alertasDasTransacoes(db, [gasto.id])).get(gasto.id)).toHaveLength(1);
+
+    // Rodar de novo não duplica; visto não volta para a janela.
+    await marcarVistos(db, [aviso!.id]);
+    const r2 = await atualizarAlertas(db);
+    expect(r2.novos).toBe(0);
+    expect((await alertasParaJanela(db)).some((a) => a.id === aviso!.id)).toBe(false);
+
+    // Você corrige a transação: a situação some e o aviso se resolve sozinho.
+    await db.update(schema.transacoes).set({ escopo: "PJ", categoriaId: "pj_outros", natureza: "comum" }).where(sql`id = ${gasto.id}`);
+    await atualizarAlertas(db);
+    expect(await db.query.alertas.findFirst({ where: (a, { eq }) => eq(a.id, aviso!.id) })).toMatchObject({ status: "resolvido" });
+
+    // Dispensado não volta, mesmo que a situação continue.
+    const qualquer = (await listarAlertasAtivos(db))[0];
+    if (qualquer) {
+      await dispensarAlerta(db, qualquer.id);
+      await atualizarAlertas(db);
+      expect(await db.query.alertas.findFirst({ where: (a, { eq }) => eq(a.id, qualquer.id) })).toMatchObject({ status: "dispensado" });
+    }
+    const contagem = await contarAlertasAtivos(db);
+    expect(contagem.total).toBe((await listarAlertasAtivos(db)).length);
+  });
+
+  it("ferramentas do consultor consultam os dados e escondem documentos", async () => {
+    const ferramentas = ferramentasDoConsultor(db);
+    const rodar = async (nome: string, entrada: unknown) => JSON.parse((await ferramentas.find((f) => f.name === nome)!.run(entrada as never)) as string);
+    const panorama = await rodar("panorama_do_mes", {});
+    expect(panorama.empresa).toHaveProperty("receitaTotal");
+    expect(panorama.consolidado).toHaveProperty("posicaoLiquida_reais");
+    expect(panorama.erro).toBeUndefined();
+    await db.insert(schema.transacoes).values({
+      contaId: (await db.query.contas.findFirst())!.id,
+      data: hojeBrasil(),
+      descricao: "PIX ENVIADO 123.456.789-09 FULANO",
+      descricaoNormalizada: "PIX ENVIADO 12345678909 FULANO",
+      valorCentavos: -1_000,
+      hashDedup: "tool-cpf",
+    });
+    const busca = await rodar("buscar_transacoes", { texto: "FULANO" });
+    expect(busca.quantidade).toBe(1);
+    expect(busca.transacoes[0].descricao).toBe("PIX ENVIADO [CPF] FULANO");
+    expect(busca.transacoes[0].valor_reais).toBe(-10);
+    for (const nome of ["dividas", "cartoes", "fluxo_de_caixa", "impostos_e_recebiveis", "avisos_ativos", "gastos_recorrentes"]) {
+      expect((await rodar(nome, {})).erro).toBeUndefined();
+    }
+    expect((await rodar("gastos_por_categoria", { escopo: "PF" })).erro).toBeUndefined();
+    expect((await rodar("simular_quitacao", { extraMensalReais: 200 })).ordem.length).toBeGreaterThan(0);
+    expect((await rodar("simular_pro_labore", { novoProLaboreReais: 5000 })).novo).toHaveProperty("anexo");
+    expect((await rodar("simular_financiamento", { valorBemReais: 25000, entradaReais: 10000, taxaMensalPercentual: 1.8, meses: 36 })).parcela_reais).toBeGreaterThan(500);
+  });
+
+  it("consultor: conversa com ferramenta e resposta em streaming (API falsa)", async () => {
+    const pedidos: { tools: { name: string }[]; messages: { role: string; content: unknown }[]; system: unknown }[] = [];
+    const sse = (eventos: object[]) => eventos.map((e) => `event: ${(e as { type: string }).type}\ndata: ${JSON.stringify(e)}\n\n`).join("");
+    const mensagem = (id: string) => ({ type: "message_start", message: { id, type: "message", role: "assistant", model: "claude-sonnet-5-5", content: [], stop_reason: null, usage: { input_tokens: 10, output_tokens: 0 } } });
+    const servidor = createServer((req, res) => {
+      let corpo = "";
+      req.on("data", (c) => (corpo += c));
+      req.on("end", () => {
+        const pedido = JSON.parse(corpo);
+        pedidos.push(pedido);
+        res.writeHead(200, { "content-type": "text/event-stream" });
+        if (pedidos.length === 1) {
+          res.end(
+            sse([
+              mensagem("m1"),
+              { type: "content_block_start", index: 0, content_block: { type: "tool_use", id: "tu1", name: "panorama_do_mes", input: {} } },
+              { type: "content_block_delta", index: 0, delta: { type: "input_json_delta", partial_json: "{}" } },
+              { type: "content_block_stop", index: 0 },
+              { type: "message_delta", delta: { stop_reason: "tool_use" }, usage: { output_tokens: 5 } },
+              { type: "message_stop" },
+            ]),
+          );
+        } else {
+          res.end(
+            sse([
+              mensagem("m2"),
+              { type: "content_block_start", index: 0, content_block: { type: "text", text: "" } },
+              { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "Sua empresa está bem. " } },
+              { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "**O que fazer agora**: importar o extrato." } },
+              { type: "content_block_stop", index: 0 },
+              { type: "message_delta", delta: { stop_reason: "end_turn" }, usage: { output_tokens: 12 } },
+              { type: "message_stop" },
+            ]),
+          );
+        }
+      });
+    });
+    await new Promise<void>((ok) => servidor.listen(0, ok));
+    process.env.ANTHROPIC_API_KEY = "teste";
+    process.env.ANTHROPIC_BASE_URL = `http://127.0.0.1:${(servidor.address() as { port: number }).port}`;
+    redefinirClienteIa();
+    try {
+      const eventos: EventoConsultor[] = [];
+      await perguntarAoConsultor(db, { pergunta: "Como está minha situação?" }, (e) => eventos.push(e));
+      const texto = eventos.filter((e) => e.tipo === "texto").map((e) => e.delta).join("");
+      expect(texto).toBe("Sua empresa está bem. **O que fazer agora**: importar o extrato.");
+      expect(eventos.some((e) => e.tipo === "ferramenta" && e.nome === "Panorama do mês")).toBe(true);
+      expect(eventos.at(-1)?.tipo).toBe("fim");
+      // A 2ª chamada levou o resultado da ferramenta (dados reais do banco, em reais).
+      const resultado = JSON.stringify(pedidos[1].messages.at(-1));
+      expect(resultado).toContain("tool_result");
+      expect(resultado).toContain("posicaoLiquida_reais");
+      expect(pedidos[0].tools.map((t) => t.name)).toContain("simular_financiamento");
+      const conversa = (await listarConversas(db))[0];
+      const msgs = await mensagensDaConversa(db, conversa.id);
+      expect(msgs.map((m) => m.papel)).toEqual(["usuario", "consultor"]);
+      expect(msgs[1].ferramentas).toEqual(["Panorama do mês"]);
+
+      // Segunda pergunta na mesma conversa leva o histórico.
+      pedidos.length = 0;
+      await perguntarAoConsultor(db, { pergunta: "E o carro?", conversaId: conversa.id }, () => undefined);
+      expect(pedidos[0].messages.slice(0, 3).map((m) => m.role)).toEqual(["user", "assistant", "user"]);
+    } finally {
+      delete process.env.ANTHROPIC_API_KEY;
+      delete process.env.ANTHROPIC_BASE_URL;
+      redefinirClienteIa();
+      servidor.close();
+    }
   });
 });
