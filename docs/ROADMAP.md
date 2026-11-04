@@ -34,7 +34,8 @@
 
 ## Fase 3 — consultora
 - [x] Painel de indicadores (v0.6.0): taxa de poupança, reserva em meses, comprometimento de renda, dias de caixa, margem
-- [ ] "Skill" de gestão financeira + chat com consultas e simulações (carro, pró-labore × Fator R, quitação)
+- [x] "Skill" de gestão financeira + chat com consultas e simulações (carro, pró-labore × Fator R, quitação) (v0.7.0)
+- [x] Inteligência interna: avisos proativos (janela, painéis, transações, central) e carta da semana (v0.7.0)
 - [ ] Metas: troca de carro, reserva de caixa da PJ, reserva/investimentos PF
 
 ## Fase 4 — rotina
@@ -54,7 +55,7 @@
 - [ ] Wise/PayPal: transações em moeda estrangeira (conversão para BRL)
 
 ### Fase 3 — inteligência
-- [ ] Chat com os próprios dados ("quanto gastei com delivery este ano?") — IA com ferramentas de consulta SQL só-leitura
+- [x] Chat com os próprios dados ("quanto gastei com delivery este ano?") — ferramentas de consulta (v0.7.0)
 - [ ] Pró-labore × distribuição de lucros: acompanhamento anual e simulação do Fator R
 - [ ] Alertas semanais (e-mail/Telegram): gastos fora do padrão, mistura, contas a vencer
 - [ ] Orçamento e metas por categoria

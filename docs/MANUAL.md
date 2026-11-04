@@ -4,7 +4,7 @@ Este manual explica cada tela do app e como os números são calculados. Ele é 
 **Ajuda** dentro do app (o ícone **?** ao lado do título de cada tela leva direto para a seção certa).
 
 **Sumário:** [Conceitos](#conceitos) · [Menu](#menu) · Painéis: [Consolidado](#painel), [Pessoal (PF)](#painel-pf),
-[Empresa (PJ)](#painel-pj) · [Indicadores](#indicadores) · [Transações](#transacoes) · [Classificação automática](#classificacao) ·
+[Empresa (PJ)](#painel-pj) · [Indicadores](#indicadores) · [Consultor](#consultor) · [Avisos](#avisos) · [Transações](#transacoes) · [Classificação automática](#classificacao) ·
 [A receber](#receber) · [A pagar e dívidas](#pagar) · [Cartões](#cartoes) · [Fluxo de caixa](#fluxo) ·
 [Impostos e Fator R](#impostos) · [Importar](#importar) · [Contas](#contas) · [Integrações](#integracoes) ·
 [Configurações](#configuracoes) · [Custo da IA](#custos-ia) · [Rotina sugerida](#rotina) · [Novidades](#novidades)
@@ -71,12 +71,13 @@ O app classifica cada transação em camadas. Uma camada nunca desfaz a decisão
 | Grupo | Telas |
 |---|---|
 | Painéis | **Consolidado** (você + empresa), **Pessoal (PF)**, **Empresa (PJ)** |
+| Consultor | **Conversar** (chat), **Avisos** (com o número de avisos ativos) |
 | Dia a dia | Transações, A pagar e dívidas, A receber, Cartões, Fluxo de caixa |
 | Empresa | Impostos e Fator R |
 | Dados | Importar, Contas, Integrações |
 | Sistema | Configurações, Ajuda |
 
-No celular, o menu fica recolhido no topo (☰).
+No celular, o menu fica recolhido no topo (☰). O botão **Consultor**, no canto de baixo, abre o chat de qualquer tela.
 
 <a id="painel"></a>
 
@@ -159,6 +160,76 @@ empresa.
 As referências são regras práticas de educação financeira, não metas obrigatórias. O símbolo (✓, !, ⚠) acompanha a cor,
 para não depender só dela.
 
+<a id="consultor"></a>
+
+## Consultor
+
+O consultor tem três formas de agir, todas seguindo a mesma **skill de gestão financeira** (o texto completo está na
+tela do consultor, em **Como o consultor pensa**):
+
+1. **Avisos automáticos** — a inteligência interna do app olha cada transação e o fluxo do dinheiro e avisa sozinha
+   (veja [Avisos](#avisos)). Não usa IA: é grátis e funciona mesmo sem a chave da Anthropic.
+2. **Conversa** (`/consultor`) — você pergunta e ele responde com os seus números.
+3. **Carta da semana** — uma vez por semana a IA escreve um resumo com as 3 prioridades da semana; ela abre na janela
+   de avisos.
+
+### Conversar
+
+- Pergunte do seu jeito: "como está minha situação?", "consigo trocar de carro?", "qual dívida quito primeiro?", "vale a
+  pena mudar o pró-labore?". Há sugestões na tela de uma conversa nova.
+- O consultor **consulta os dados do app** antes de responder (panorama do mês, gastos por categoria, transações,
+  recorrentes, dívidas, cartões, fluxo de caixa, impostos e avisos) e faz **simulações** com conta exata:
+  financiamento (Tabela Price, com seguro, IPVA e manutenção), pró-labore × Fator R (DAS e INSS), quitação de dívidas
+  (avalanche, com meses a menos e economia) e metas (quanto tempo ou quanto guardar por mês). Embaixo de cada resposta
+  aparece o que ele consultou.
+- Toda resposta termina com **O que fazer agora**.
+- As conversas ficam salvas (lista à esquerda); dá para apagar.
+- Nos avisos e nas transações, **perguntar ao consultor** abre o chat com a pergunta pronta.
+- **Privacidade:** as ferramentas não entregam CPF, CNPJ nem número de conta (aparecem como [CPF], [CNPJ]).
+- **Custo:** usa o Claude Sonnet 5.5 (US$ 2 / US$ 10 por milhão de tokens); cada pergunta faz algumas consultas. O gasto
+  aparece em Configurações. Para trocar o modelo: `MODELO_CONSULTOR` no `.env`.
+
+<a id="avisos"></a>
+
+## Avisos
+
+O app acompanha tudo o que entra e avisa o que merece atenção — com o **que fazer**. Os avisos aparecem:
+
+- numa **janela** ao abrir o app, quando há aviso novo urgente ou de atenção (e a carta da semana). **Entendi** fecha e
+  não mostra de novo o mesmo aviso;
+- no topo de cada painel (**O consultor está de olho**), filtrados para PF ou PJ;
+- **junto da transação**, na lista de Transações (ex.: "gasto pessoal pago pela empresa");
+- na **Central de avisos** (`/avisos`), com o número no menu.
+
+| Aviso | Quando aparece |
+|---|---|
+| Dívida em risco (urgente) | Parcela atrasada de dívida com limite de atraso (ex.: acordo judicial) |
+| Dívida atrasada / juros altos | Parcela vencida; juros acima de 3% ao mês (quite primeiro — método avalanche) |
+| Conta vencida / vence em breve | Contas a pagar vencidas ou que vencem em até 3 dias; lembretes depois de pagar |
+| Caixa negativo previsto | O fluxo de caixa projetado fica negativo (urgente se for nas próximas 4 semanas) |
+| Gasto pessoal pago pela empresa / gasto da empresa pago por você | Mistura entre PF e PJ |
+| Retirada sem definição | Pix da empresa para você ainda não marcado como pró-labore ou lucro |
+| Juros, multas e tarifas | Encargos evitáveis numa conta ou cartão no mês |
+| Gasto acima do normal | Gasto 3× acima do normal da categoria (mínimo R$ 300) |
+| Nova cobrança recorrente / ficou mais cara | Assinatura nova ou reajuste de 10% ou mais |
+| Nova compra parcelada | Parcelamento de 3 ou mais vezes que soma R$ 500 ou mais |
+| Você tirou mais do que a empresa gerou / prejuízo | No último mês fechado |
+| Reserva baixa (empresa ou pessoal) | Abaixo de 1 mês de custo (PJ) ou de 3 meses (PF) |
+| Parcelas comprometem a renda | Parcelas acima de 30% da renda (urgente acima de 40%) |
+| Gastou mais do que recebeu / custo de vida subiu | No último mês fechado |
+| Fator R abaixo de 28% | Com 6+ meses de receita e pró-labore informado |
+| Cartão: limite alto / sem configuração | Uso acima de 70% do limite; falta fechamento/vencimento |
+| Cobranças vencidas / cliente concentrado | Recebíveis atrasados; um cliente com mais de 50% da receita |
+| Importe o extrato | Conta sem lançamentos há mais de 20 dias; muitas transações para revisar |
+
+**O que fazer com um aviso:** **resolver** leva à tela certa; **lembrar em 7 dias** adia; **já resolvi / não mostrar**
+dispensa aquela situação de vez. Quando a situação deixa de existir (ex.: você corrigiu a transação ou pagou a conta), o
+aviso **se resolve sozinho** e vai para "Resolvidos nos últimos 30 dias". Os avisos são revistos a cada importação,
+sincronização, correção e, no máximo, de hora em hora; **Verificar agora** força.
+
+**Carta da semana:** chega sozinha uma vez por semana (de manhã) se a chave da Anthropic estiver configurada; o botão
+**Carta da semana agora** pede na hora. Para desligar: `CARTA_SEMANAL=0` no `.env`.
+
 <a id="transacoes"></a>
 
 ## Transações
@@ -171,6 +242,8 @@ Lista tudo o que entrou e saiu, com filtros por mês, conta, escopo, texto e "s�
 - **corrigir** abre a edição: de quem é (PF/PJ), categoria e natureza. Marque **"Aplicar a todas que contêm…"** para
   criar uma regra: ela vale para as transações parecidas que já existem e para as que vierem.
 - **Classificar com IA** aparece quando há transações sem categoria.
+- Quando o consultor tem algo a dizer sobre uma transação (mistura, retirada sem definição, gasto fora do padrão,
+  assinatura nova…), a mensagem aparece embaixo dela, com o que fazer e o atalho **perguntar**.
 
 <a id="classificacao"></a>
 
@@ -435,9 +508,11 @@ A IA é cobrada pela Anthropic por **tokens** (pedaços de texto) enviados e rec
 | Ler PDFs e fotos de extrato | Claude Haiku 5.5 | Muito volume e tarefa simples (transcrever) |
 | Classificar transações | Claude Haiku 5.5 | Muito volume, decisões curtas |
 | Diagnóstico mensal | Claude Opus 5.5 | Uma chamada por mês, precisa de raciocínio melhor |
+| Consultor (chat) | Claude Sonnet 5.5 | Conversa com várias consultas por pergunta: equilíbrio entre custo e qualidade |
+| Carta da semana | Claude Opus 5.5 | Uma chamada por semana |
 
-Referência de preço (por milhão de tokens): Haiku 5.5 US$ 0,10 de entrada e US$ 0,50 de saída; Opus 5.5 US$ 4 e
-US$ 20.
+Referência de preço (por milhão de tokens): Haiku 5.5 US$ 0,10 de entrada e US$ 0,50 de saída; Sonnet 5.5 US$ 2 e US$ 10;
+Opus 5.5 US$ 4 e US$ 20. Os avisos automáticos não usam IA.
 
 **Como gastar ainda menos**
 
@@ -447,7 +522,8 @@ US$ 20.
 - Integrações (como o **Asaas**) não usam IA para trazer os dados.
 - Crie **regras** ao corrigir transações: o que a regra resolve não vai para a IA.
 
-**Trocar o modelo de uma tarefa:** no `.env`, defina `MODELO_EXTRACAO`, `MODELO_CLASSIFICACAO` ou `MODELO_ANALISE`
+**Trocar o modelo de uma tarefa:** no `.env`, defina `MODELO_EXTRACAO`, `MODELO_CLASSIFICACAO`, `MODELO_ANALISE` (também
+usado pela carta da semana) ou `MODELO_CONSULTOR`
 (ex.: `MODELO_ANALISE=claude-sonnet-5-5`) e rode `docker compose up -d`.
 
 O quadro em **Configurações → Inteligência artificial** mostra o gasto estimado do mês. O valor oficial fica no
@@ -459,9 +535,10 @@ console da Anthropic, onde também dá para definir um **limite mensal de gasto*
 
 **Toda semana (10 minutos)**
 
-1. Abra **A receber**: cobre quem está vencido.
-2. Abra **Transações → só para revisar** e resolva os destaques (principalmente retiradas do sócio e mistura).
-3. Importe os extratos das contas sem integração (ou a cada 15 dias) e as **faturas** que fecharam.
+1. Leia a **carta da semana** e resolva os **avisos** urgentes.
+2. Abra **A receber**: cobre quem está vencido.
+3. Abra **Transações → só para revisar** e resolva os destaques (principalmente retiradas do sócio e mistura).
+4. Importe os extratos das contas sem integração (ou a cada 15 dias) e as **faturas** que fecharam.
 
 **Todo mês**
 

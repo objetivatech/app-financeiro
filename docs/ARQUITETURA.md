@@ -118,6 +118,26 @@ importado por arquivo nessa conta, para não duplicar.
 Movimentações entre bolsos (transferências, faturas, investimentos) não contam como receita/despesa. `src/lib/ia/analise.ts` manda à IA só dados agregados (as três
 visões, categorias, dívidas, recorrentes, maiores saídas) e recebe diagnóstico, alertas, dicas e perguntas para o contador.
 
+## Consultor (`src/lib/consultor`)
+
+- `skill.ts` + `referencias.ts`: a skill de gestão financeira (texto do prompt de sistema) e os números de referência
+  usados por avisos, painéis e IA.
+- **Avisos** — `regras.ts` (puro): ~25 detectores sobre um `Retrato` (visões do último mês fechado, médias de 3 meses,
+  saldos, dívidas, cartões, recebíveis, Fator R, fluxo de 13 semanas, contas a pagar, transações de 150 dias, contas
+  sem extrato). `alertas.ts`: monta o retrato, grava na tabela `alertas` por `chave` (a mesma situação não duplica;
+  dispensado não volta; ficou mais grave → reaparece na janela) e resolve sozinho o que não foi mais detectado. Roda
+  após importação, sincronização do Asaas e correção de transação, de hora em hora (`instrumentation.ts`) e ao abrir
+  telas (no máximo a cada 10 min).
+- **Chat** — `chat.ts`: `toolRunner` do SDK (beta) em streaming, modelo `MODELO_CONSULTOR` (Sonnet 5.5), esforço médio,
+  fallback de recusa, prompt de sistema com cache (a data e o perfil vão num bloco à parte). `ferramentas.ts`: 13
+  ferramentas Zod (consultas e simulações) que devolvem JSON em reais e mascaram CPF/CNPJ/números longos.
+  `simulacoes.ts` (puro): Price, pró-labore × Fator R, avalanche, metas. `/api/consultor` responde em NDJSON (texto,
+  ferramenta, fim, erro, ping a cada 15 s por causa do limite da Cloudflare). Histórico: só o texto das últimas 16
+  mensagens (tabelas `conversas` e `mensagens_consultor`).
+- **Carta da semana** — `carta.ts`: uma chamada com saída estruturada sobre o retrato e os avisos; gravada como aviso
+  `carta:<data>` que abre na janela e expira em 7 dias.
+- `src/lib/markdown.ts`: renderiza o texto da IA sem HTML cru, só links http(s)/mailto/do app, sem imagens.
+
 ## Privacidade
 
 | Vai para a API do Claude | Não vai |
@@ -125,6 +145,7 @@ visões, categorias, dívidas, recorrentes, maiores saídas) e recebe diagnósti
 | PDFs e imagens de extrato (para leitura) | CPF/CNPJ na classificação e nas dicas |
 | Data, descrição, valor e tipo da conta (classificação) | Número de conta e agência na classificação e nas dicas |
 | Totais e maiores saídas do mês (dicas) | Nada é enviado se a chave não estiver configurada |
+| Resultados das ferramentas do consultor (resumos, transações com documentos mascarados) | Os avisos automáticos (rodam sem IA) |
 
 A consulta de CNPJ (BrasilAPI) envia só o CNPJ da empresa que recebeu um pagamento — dado público. CPF nunca é
 consultado.

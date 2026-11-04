@@ -2,6 +2,7 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { BarrasMensais } from "@/components/barras-mensais";
+import { AvisosDoPainel } from "@/components/avisos-painel";
 import { LinkAjuda } from "@/components/link-ajuda";
 import { ListaCategorias } from "@/components/lista-categorias";
 import { ResumoDividasCartoes } from "@/components/resumo-dividas-cartoes";
@@ -41,6 +42,10 @@ async function Conteudo({ searchParams }: { searchParams: Busca }) {
         </div>
         <SeletorMes caminho="/pj" mes={mes} />
       </div>
+
+      <Suspense fallback={null}>
+        <AvisosDoPainel escopo="PJ" limite={3} />
+      </Suspense>
 
       {d.pendencias.semEscopo > 0 && (
         <p className="rounded-md border border-alerta/40 bg-alerta/10 p-3 text-sm">

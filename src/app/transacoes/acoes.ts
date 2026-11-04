@@ -2,6 +2,7 @@
 
 import { and, eq, isNull, ne, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { atualizarAlertas } from "@/lib/consultor/alertas";
 import { CATEGORIAS_PADRAO } from "@/lib/classificacao/categorias";
 import { classificarPendentes } from "@/lib/classificacao/executar";
 import { obterDb } from "@/lib/db";
@@ -67,6 +68,7 @@ export async function salvarClassificacao(formData: FormData) {
       await classificarPendentes(db, { usarIa: false });
     }
   }
+  await atualizarAlertas(obterDb(), { atualizarCompromissos: false }).catch(() => undefined);
   revalidatePath("/transacoes");
   revalidatePath("/");
 }
@@ -74,6 +76,7 @@ export async function salvarClassificacao(formData: FormData) {
 export async function marcarRevisada(formData: FormData) {
   const db = obterDb();
   await db.update(transacoes).set({ revisar: false }).where(eq(transacoes.id, Number(formData.get("id"))));
+  await atualizarAlertas(obterDb(), { atualizarCompromissos: false }).catch(() => undefined);
   revalidatePath("/transacoes");
   revalidatePath("/");
 }
@@ -81,6 +84,7 @@ export async function marcarRevisada(formData: FormData) {
 export async function reclassificarComIa() {
   const db = obterDb();
   await classificarPendentes(db);
+  await atualizarAlertas(obterDb(), { atualizarCompromissos: false }).catch(() => undefined);
   revalidatePath("/transacoes");
   revalidatePath("/");
 }

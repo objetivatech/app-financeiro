@@ -6,18 +6,26 @@ import Anthropic from "@anthropic-ai/sdk";
  * - a análise mensal é pouca chamada e pede mais raciocínio: Opus.
  * Todos podem ser trocados por variável de ambiente.
  */
-export type TarefaIa = "extracao" | "classificacao" | "analise";
+export type TarefaIa = "extracao" | "classificacao" | "analise" | "consultor" | "carta";
 
+/**
+ * O consultor (chat) usa o Sonnet 5.5: conversa com várias consultas por pergunta, então custo por
+ * mensagem importa; a carta semanal é uma chamada por semana e usa o mesmo modelo da análise.
+ */
 const PADRAO: Record<TarefaIa, string> = {
   extracao: "claude-haiku-5-5",
   classificacao: "claude-haiku-5-5",
   analise: "claude-opus-5-5",
+  consultor: "claude-sonnet-5-5",
+  carta: "claude-opus-5-5",
 };
 
 const VARIAVEL: Record<TarefaIa, string> = {
   extracao: "MODELO_EXTRACAO",
   classificacao: "MODELO_CLASSIFICACAO",
   analise: "MODELO_ANALISE",
+  consultor: "MODELO_CONSULTOR",
+  carta: "MODELO_ANALISE",
 };
 
 export function modeloDa(tarefa: TarefaIa): string {
@@ -39,6 +47,7 @@ export function opcoesDeFallback(modelo: string): { betas?: string[]; fallbacks?
 const PRECOS: { prefixo: string; entrada: number; saida: number; entradaLonga?: number; saidaLonga?: number }[] = [
   { prefixo: "claude-haiku-5-5", entrada: 0.1, saida: 0.5, entradaLonga: 0.5, saidaLonga: 2.5 },
   { prefixo: "claude-sonnet-5", entrada: 2, saida: 10 },
+  { prefixo: "claude-sonnet-4", entrada: 3, saida: 15 },
   { prefixo: "claude-opus-5-5", entrada: 4, saida: 20 },
   { prefixo: "claude-opus", entrada: 5, saida: 25 },
   { prefixo: "claude-fable", entrada: 10, saida: 50 },
@@ -63,6 +72,11 @@ export function iaDisponivel(): boolean {
 export function obterClienteIa(): Anthropic {
   cliente ??= new Anthropic();
   return cliente;
+}
+
+/** Para testes: recria o cliente na próxima chamada (ex.: outra ANTHROPIC_BASE_URL). */
+export function redefinirClienteIa(): void {
+  cliente = undefined;
 }
 
 export class ErroIa extends Error {

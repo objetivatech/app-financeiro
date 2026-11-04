@@ -27,4 +27,17 @@ export async function register() {
     setTimeout(rodar, 60_000).unref();
     setInterval(rodar, 6 * 60 * 60_000).unref();
   }
+
+  // Inteligência interna: revisa os avisos a cada hora e, uma vez por semana, a IA escreve a carta
+  // da semana (se houver chave da Anthropic; CARTA_SEMANAL=0 desliga a carta).
+  const { atualizarAlertas } = await import("./lib/consultor/alertas");
+  const revisar = async () => {
+    await atualizarAlertas(obterDb()).catch((erro) => console.error("Falha ao atualizar avisos", erro));
+    if (process.env.CARTA_SEMANAL !== "0" && (process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN)) {
+      const { cartaSemanalSeNecessario } = await import("./lib/consultor/carta");
+      await cartaSemanalSeNecessario(obterDb()).catch((erro) => console.error("Falha ao gerar a carta da semana", erro));
+    }
+  };
+  setTimeout(revisar, 5 * 60_000).unref();
+  setInterval(revisar, 60 * 60_000).unref();
 }

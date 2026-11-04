@@ -15,6 +15,13 @@ export const GRUPOS_MENU = [
     ],
   },
   {
+    titulo: "Consultor",
+    links: [
+      { href: "/consultor", rotulo: "Conversar" },
+      { href: "/avisos", rotulo: "Avisos", contador: true },
+    ],
+  },
+  {
     titulo: "Dia a dia",
     links: [
       { href: "/transacoes", rotulo: "Transações" },
@@ -49,7 +56,7 @@ function ativo(caminho: string, href: string): boolean {
   return href === "/" ? caminho === "/" : caminho === href || caminho.startsWith(`${href}/`);
 }
 
-export function Menu() {
+export function Menu({ contadorAvisos }: { contadorAvisos?: ReactNode }) {
   const caminho = usePathname();
   return (
     <nav aria-label="Menu principal" className="space-y-4 text-sm">
@@ -68,6 +75,7 @@ export function Menu() {
                   >
                     <span>{l.rotulo}</span>
                     {"detalhe" in l && <span className={`text-xs ${"cor" in l ? l.cor : "text-suave"}`}>{l.detalhe}</span>}
+                    {"contador" in l && contadorAvisos}
                   </Link>
                 </li>
               );
@@ -87,7 +95,7 @@ export function TituloAtual() {
 }
 
 /** Menu do celular: recolhido no topo; fecha sozinho ao escolher uma página. */
-export function MenuCelular({ marca, rodape }: { marca: ReactNode; rodape: ReactNode }) {
+export function MenuCelular({ marca, rodape, contadorAvisos }: { marca: ReactNode; rodape: ReactNode; contadorAvisos?: ReactNode }) {
   const [aberto, setAberto] = useState(false);
   return (
     <details open={aberto} onToggle={(e) => setAberto(e.currentTarget.open)}>
@@ -104,9 +112,24 @@ export function MenuCelular({ marca, rodape }: { marca: ReactNode; rodape: React
           if ((e.target as HTMLElement).closest("a")) setAberto(false);
         }}
       >
-        <Menu />
+        <Menu contadorAvisos={contadorAvisos} />
         <div className="mt-3 px-2">{rodape}</div>
       </div>
     </details>
+  );
+}
+
+/** Botão flutuante para chamar o consultor de qualquer tela. */
+export function BotaoConsultor() {
+  const caminho = usePathname();
+  if (caminho.startsWith("/consultor")) return null;
+  return (
+    <Link
+      href="/consultor"
+      className="fixed bottom-4 right-4 z-40 rounded-full bg-foreground px-4 py-2.5 text-sm font-medium text-background shadow-lg hover:opacity-90"
+      title="Conversar com o consultor"
+    >
+      Consultor
+    </Link>
   );
 }
