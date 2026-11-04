@@ -40,15 +40,18 @@ function resumoConcluido(s: SituacaoTrabalho): string {
 export function Importador({
   contas,
   idsIniciais,
+  contaInicial = "",
 }: {
   contas: { id: number; apelido: string }[];
+  /** Conta já escolhida (ex.: ao enviar a fatura a partir da tela Cartões). */
+  contaInicial?: string;
   /** Trabalhos que já estavam na fila quando a página abriu. */
   idsIniciais: number[];
 }) {
   const [itens, setItens] = useState<Item[]>(() =>
     idsIniciais.map((id) => ({ chave: `srv-${id}`, nome: `#${id}`, id, envio: "enviado" })),
   );
-  const [contaId, setContaId] = useState("");
+  const [contaId, setContaId] = useState(contaInicial);
   const [enviando, setEnviando] = useState(false);
   const [arrastando, setArrastando] = useState(false);
   // O servidor ainda está trabalhando (lendo arquivos ou classificando o lote)?

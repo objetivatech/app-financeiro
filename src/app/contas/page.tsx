@@ -56,6 +56,11 @@ async function Lista() {
                 {c.numero ? ` · conta ${c.numero}` : ""}
                 {c.finalCartao ? ` · final ${c.finalCartao}` : ""}
               </div>
+              {c.tipo === "cartao_credito" && (
+                <Link href="/cartoes" className="text-xs underline">
+                  fechamento, vencimento e limite em Cartões
+                </Link>
+              )}
             </div>
             <div className="text-right text-xs text-suave">
               <div>{c.quantidade} transações</div>

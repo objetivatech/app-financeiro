@@ -52,9 +52,16 @@ Ordem de prioridade (uma etapa nunca sobrescreve outra de prioridade maior):
 | 6 | usuário | correção manual |
 | 5 | regra | "descrição contém NETFLIX → PF, Assinaturas" (criada a partir de correções) |
 | 4 | transferência | mesmo valor saindo de uma conta e entrando em outra sua em até 3 dias |
-| 3 | heurística | DAS do Simples, pagamento de fatura, pró-labore, aplicação/resgate |
+| 3 | heurística | DAS do Simples, pagamento de fatura, pró-labore, aplicação/resgate; e os classificadores complementares |
 | 2 | IA | categoria + escopo pela natureza do gasto, com confiança |
 | 1 | conta | palpite inicial pelo escopo da conta |
+
+**Classificadores complementares** (`classificacao/enriquecimento.ts`, puro; `classificacao/cnpj.ts`, rede + cache),
+aplicados com origem "heurística" depois do pareamento de transferências e antes da IA, só no que ainda está sem
+categoria: (1) histórico das correções manuais pela chave do estabelecimento (≥ 80% de concordância); (2) dicionário de
+estabelecimentos brasileiros (`TipoGasto` → categoria por escopo; ferramentas de trabalho forçam PJ); (3) CNPJ da
+contraparte → CNAE pela BrasilAPI, com cache na tabela `empresas` (só CNPJ; `CONSULTA_CNPJ=0` desliga; nos testes,
+desligado). Análise das alternativas em `docs/CLASSIFICADORES.md`.
 
 Depois, `marcarMistura` sinaliza gasto PF em conta PJ (e vice-versa). Transferências PJ→PF viram `retirada_socio`
 para você definir se foi pró-labore ou distribuição de lucros (o tratamento tributário é diferente).
@@ -85,11 +92,31 @@ importado por arquivo nessa conta, para não duplicar.
   mínimo, receita máxima). `fiscal/indicadores.ts`: receita mensal (notas autorizadas, ou recebimentos), RBT12 e
   indicadores de contas a receber.
 
-## Painel e análise
+## Cartões (`src/lib/cartoes`)
 
-`src/lib/consultas.ts` calcula os totais em SQL. Movimentações entre bolsos (transferências, faturas, investimentos,
-retiradas e aportes) não contam como receita/despesa. `src/lib/ia/analise.ts` manda à IA só dados agregados (totais,
-categorias, recorrentes, maiores saídas) e recebe diagnóstico, alertas, dicas e perguntas para o contador.
+- `contas` de tipo cartão guardam `dia_fechamento`, `dia_vencimento`, `limite_centavos` e `conta_pagamento_id`.
+- `faturas` (uma por cartão e vencimento) vêm da leitura do PDF (a IA devolve vencimento, fechamento, total e mínimo)
+  ou do lançamento manual; cada uma gera um compromisso *pagar* (origem `fatura`, categoria `mov_fatura`) na conta que
+  paga o cartão. A conciliação marca a saída como `pagamento_fatura`.
+- `calculo.ts` (puro): fatura de uma compra pelo fechamento/vencimento e projeção de parcelas futuras (a parcela mais
+  recente de cada compra, identificada pela descrição sem o "3/10", valor e total de parcelas).
+- A deduplicação inclui o número da parcela no hash, porque a fatura repete a data da compra original todo mês.
+- O fluxo de caixa soma as parcelas futuras nos meses sem fatura conhecida; compromissos cadastrados no cartão (ex.:
+  compra parcelada lançada como dívida) saem do fluxo nos meses com fatura conhecida.
+
+## Painéis e análise (`src/lib/visoes`)
+
+- `consultas.ts`: uma consulta agrega o mês em "somas" (receita, impostos, despesas, dívidas, cada natureza do fluxo
+  sócio ↔ empresa, investimentos…), separadas por escopo e sinal.
+- `calculo.ts` (puro): transforma as somas nas visões **PJ** (DRE gerencial de caixa), **PF** (renda, custo de vida,
+  sobra) e **consolidada**. Regras: transferências PJ ↔ PF contam uma vez (maior das duas pernas); gasto pessoal pago
+  pela PJ é saída da PJ e renda + custo da PF; gasto da PJ pago pela PF é despesa da PJ e aporte da PF; estornos abatem.
+  Invariante testada: ficou na empresa + sobrou para você = resultado consolidado.
+- `paineis.ts`: junta visões, saldos, dívidas, cartões, recebíveis e Fator R para as três telas, e monta os nós do
+  diagrama de fluxo (`components/fluxo-dinheiro.tsx`, Sankey em SVG renderizado no servidor).
+
+Movimentações entre bolsos (transferências, faturas, investimentos) não contam como receita/despesa. `src/lib/ia/analise.ts` manda à IA só dados agregados (as três
+visões, categorias, dívidas, recorrentes, maiores saídas) e recebe diagnóstico, alertas, dicas e perguntas para o contador.
 
 ## Privacidade
 
@@ -98,3 +125,6 @@ categorias, recorrentes, maiores saídas) e recebe diagnóstico, alertas, dicas 
 | PDFs e imagens de extrato (para leitura) | CPF/CNPJ na classificação e nas dicas |
 | Data, descrição, valor e tipo da conta (classificação) | Número de conta e agência na classificação e nas dicas |
 | Totais e maiores saídas do mês (dicas) | Nada é enviado se a chave não estiver configurada |
+
+A consulta de CNPJ (BrasilAPI) envia só o CNPJ da empresa que recebeu um pagamento — dado público. CPF nunca é
+consultado.

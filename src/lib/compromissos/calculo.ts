@@ -26,6 +26,29 @@ export function vencimentosMensais(primeiro: string, quantidade: number, dia?: n
   return datas;
 }
 
+/**
+ * Último dia útil do mês (segunda a sexta). Feriados não entram na conta: num feriado, o banco
+ * aceita o pagamento no dia útil seguinte sem multa, então o erro é a favor.
+ */
+export function ultimoDiaUtil(ano: number, mes: number): string {
+  let dia = ultimoDiaDoMes(ano, mes);
+  for (;;) {
+    const semana = new Date(Date.UTC(ano, mes - 1, dia)).getUTCDay();
+    if (semana !== 0 && semana !== 6) break;
+    dia--;
+  }
+  return `${ano}-${String(mes).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
+}
+
+/** Vencimentos no último dia útil de cada mês, começando no mês da data informada. */
+export function vencimentosUltimoDiaUtil(primeiro: string, quantidade: number): string[] {
+  const [ano, mes] = primeiro.split("-").map(Number);
+  return Array.from({ length: quantidade }, (_, i) => {
+    const alvo = new Date(Date.UTC(ano, mes - 1 + i, 1));
+    return ultimoDiaUtil(alvo.getUTCFullYear(), alvo.getUTCMonth() + 1);
+  });
+}
+
 export interface ParcelaPlanejada {
   numero: number;
   vencimento: string;
@@ -57,6 +80,27 @@ export function lerParcelasDigitadas(texto: string): { parcelas: ParcelaPlanejad
   parcelas.sort((a, b) => a.vencimento.localeCompare(b.vencimento));
   parcelas.forEach((p, i) => (p.numero = i + 1));
   return { parcelas, erros };
+}
+
+/**
+ * Parcelamento de débitos federais (Simples Nacional/MEI na Receita): cada parcela é a parcela
+ * básica + Selic acumulada desde o mês seguinte à consolidação até o mês anterior ao pagamento
+ * + 1% no mês do pagamento. A 1ª parcela é a básica. Como a Selic futura é desconhecida, usamos
+ * uma Selic mensal estimada (ex.: 0,0105 = 1,05% ao mês); o valor real vem no DAS de cada mês.
+ * Centavos truncados, como no DAS.
+ */
+export function parcelasCorrigidasPelaSelic(opcoes: {
+  parcelaBasicaCentavos: number;
+  quantidade: number;
+  /** Vencimentos já calculados (um por parcela). */
+  vencimentos: string[];
+  selicMensal: number;
+}): ParcelaPlanejada[] {
+  const { parcelaBasicaCentavos: basica, quantidade, vencimentos, selicMensal } = opcoes;
+  return Array.from({ length: quantidade }, (_, i) => {
+    const fator = i === 0 ? 1 : 1 + 0.01 + selicMensal * (i - 1);
+    return { numero: i + 1, vencimento: vencimentos[i], valorCentavos: Math.floor(basica * fator + 1e-6) };
+  });
 }
 
 export function parcelasFixas(primeiroVencimento: string, quantidade: number, valorCentavos: number): ParcelaPlanejada[] {
@@ -97,6 +141,8 @@ export interface CompromissoParaConciliar {
   vencimento: string;
   contaId: number | null;
   padraoExtrato: string | null;
+  /** Padrão alternativo (ex.: guias de imposto), que permite a mesma tolerância de valor sem exigir casar. */
+  padraoRegex?: RegExp | null;
 }
 
 export interface TransacaoParaConciliar {
@@ -120,6 +166,9 @@ function dias(a: string, b: string): number {
  * igual (ou até 5% de diferença quando há padrão de descrição), até 7 dias do vencimento, na conta
  * do compromisso quando ela é conhecida. Cada transação paga no máximo um compromisso.
  */
+/** Descrições típicas de pagamento de guia de imposto (DAS, DARF, GPS) no extrato. */
+export const PADRAO_GUIA_IMPOSTO = /\bDAS\b|SIMPLES|RECEITA FED|TRIBUT|DARF|ARRECADACAO|\bGPS\b|PGFN|IMPOSTO/;
+
 export function casarPagamentos(
   compromissos: CompromissoParaConciliar[],
   transacoes: TransacaoParaConciliar[],
@@ -134,7 +183,8 @@ export function casarPagamentos(
         if (c.contaId !== null && t.contaId !== c.contaId) return false;
         if (dias(t.data, c.vencimento) > JANELA_DIAS) return false;
         const valor = -t.valorCentavos;
-        const casaPadrao = c.padraoExtrato ? t.descricaoNormalizada.includes(c.padraoExtrato) : false;
+        const casaPadrao =
+          (c.padraoExtrato ? t.descricaoNormalizada.includes(c.padraoExtrato) : false) || Boolean(c.padraoRegex?.test(t.descricaoNormalizada));
         if (valor === c.valorCentavos) return c.padraoExtrato ? casaPadrao : true;
         return casaPadrao && Math.abs(valor - c.valorCentavos) <= c.valorCentavos * TOLERANCIA_VALOR;
       })

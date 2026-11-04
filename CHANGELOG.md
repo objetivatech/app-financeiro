@@ -3,6 +3,39 @@
 Todas as mudanças relevantes do app, da mais recente para a mais antiga. O formato segue
 [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e as versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.6.0] — 2026-11-04
+
+### Adicionado
+- **Três painéis, cada um com seu link:** **Consolidado** (você + empresa, tela inicial), **Pessoal (PF)** e
+  **Empresa (PJ)**.
+- **Para onde foi o dinheiro:** diagrama de fluxo no Consolidado, dos clientes à empresa, de lá para você e até o custo
+  de vida, as dívidas e o que sobrou em cada lado.
+- **Indicadores:** margem, reserva da empresa em meses, dias de caixa, quanto do resultado foi para você, peso dos
+  impostos, taxa de poupança, reserva de emergência, renda comprometida com parcelas e posição líquida (caixa + a
+  receber − dívidas − cartões), com a referência de cada um no manual.
+- **DRE gerencial** no painel da empresa: resultado antes de pagar você, o que foi para você e o que ficou.
+- **Cartões** (`/cartoes`): cadastro com fechamento, vencimento, limite e conta que paga; **envio da fatura** com
+  leitura de vencimento, total e mínimo; fatura lançada em A pagar e baixada quando o pagamento aparece no extrato;
+  **parcelas a vencer** compra por compra; limite usado; juros e encargos; projeção das próximas faturas.
+- Parcelas de cartão e faturas no **fluxo de caixa**; o pró-labore previsto que sai da PJ agora **entra na PF**.
+- **Parcelamento da Receita (Selic)** ao cadastrar dívida: parcela básica + Selic + 1%, vencendo no último dia útil.
+  Opção de "último dia útil" também para parcelas iguais.
+- **Classificadores complementares**, antes da IA e de graça: seu histórico de correções, estabelecimentos brasileiros
+  conhecidos e a atividade (CNAE) do CNPJ de quem recebeu, consultada na BrasilAPI (só CNPJ; desliga com
+  `CONSULTA_CNPJ=0`). Análise das opções em `docs/CLASSIFICADORES.md`.
+
+### Alterado
+- **Menu lateral agrupado** (Painéis, Dia a dia, Empresa, Dados, Sistema); no celular, recolhido no topo.
+- **Cálculos revistos:** pró-labore, lucros e retiradas agora contam como **renda da PF**; estornos abatem despesas em
+  vez de virar receita; transferências PJ ↔ PF não contam em dobro; gasto da empresa pago por você entra como aporte.
+- O **diagnóstico da IA** passa a receber as três visões e as dívidas.
+- Na baixa automática, o valor efetivamente pago substitui o estimado.
+
+### Corrigido
+- Parcelas de compras parceladas em faturas de meses diferentes eram descartadas como duplicadas (a fatura repete a
+  data da compra original).
+- "-R$ 0,00" em alguns totais.
+
 ## [0.5.0] — 2026-11-03
 
 ### Adicionado

@@ -3,7 +3,9 @@
 Este manual explica cada tela do app e como os números são calculados. Ele é o mesmo texto que aparece em
 **Ajuda** dentro do app (o ícone **?** ao lado do título de cada tela leva direto para a seção certa).
 
-**Sumário:** [Conceitos](#conceitos) · [Painel](#painel) · [Transações](#transacoes) · [A receber](#receber) · [A pagar e dívidas](#pagar) · [Fluxo de caixa](#fluxo) ·
+**Sumário:** [Conceitos](#conceitos) · [Menu](#menu) · Painéis: [Consolidado](#painel), [Pessoal (PF)](#painel-pf),
+[Empresa (PJ)](#painel-pj) · [Indicadores](#indicadores) · [Transações](#transacoes) · [Classificação automática](#classificacao) ·
+[A receber](#receber) · [A pagar e dívidas](#pagar) · [Cartões](#cartoes) · [Fluxo de caixa](#fluxo) ·
 [Impostos e Fator R](#impostos) · [Importar](#importar) · [Contas](#contas) · [Integrações](#integracoes) ·
 [Configurações](#configuracoes) · [Custo da IA](#custos-ia) · [Rotina sugerida](#rotina) · [Novidades](#novidades)
 
@@ -44,23 +46,118 @@ O app classifica cada transação em camadas. Uma camada nunca desfaz a decisão
 1. **Você** (correção manual) — nunca é alterada automaticamente.
 2. **Regras** criadas a partir das suas correções ("descrição contém X → Y").
 3. **Transferências** entre contas suas (mesmo valor, sinais opostos, até 3 dias, com indício de Pix/TED).
-4. **Heurísticas e integrações** (DAS do Simples, pagamento de fatura, taxas e recebimentos do Asaas…).
+4. **Heurísticas e integrações** (DAS do Simples, pagamento de fatura, taxas e recebimentos do Asaas…) e os
+   **classificadores complementares**: seu histórico, estabelecimentos conhecidos e a atividade (CNAE) de quem
+   recebeu — veja [Classificação automática](#classificacao).
 5. **IA**, que decide pela natureza do gasto e informa a confiança.
 6. **Escopo da conta**, como palpite.
 
+### Como os números são contados
+
+- **Regime de caixa:** vale o que entrou e saiu das contas no mês. **Exceção:** compras no cartão contam na **data da
+  compra**; o pagamento da fatura não é gasto (senão a compra contaria duas vezes).
+- **O dinheiro da empresa que vai para você** (pró-labore, lucros, retiradas e gastos pessoais pagos pela empresa) é
+  **saída da PJ e renda da PF**. Se as duas contas foram importadas, a transferência não conta em dobro; se só uma
+  foi, vale a que existe.
+- **Gasto da empresa pago com o seu dinheiro** é despesa da PJ e, para a PF, dinheiro colocado na empresa.
+- **Estornos** abatem a despesa (ou a receita, quando é uma venda estornada); não são receita.
+- Por isso vale sempre: **ficou na empresa + sobrou para você = resultado consolidado**.
+- Lançamentos **sem PF/PJ definido** ficam fora dos totais até você classificar (o painel avisa quantos são).
+
+<a id="menu"></a>
+
+## Menu
+
+| Grupo | Telas |
+|---|---|
+| Painéis | **Consolidado** (você + empresa), **Pessoal (PF)**, **Empresa (PJ)** |
+| Dia a dia | Transações, A pagar e dívidas, A receber, Cartões, Fluxo de caixa |
+| Empresa | Impostos e Fator R |
+| Dados | Importar, Contas, Integrações |
+| Sistema | Configurações, Ajuda |
+
+No celular, o menu fica recolhido no topo (☰).
+
 <a id="painel"></a>
 
-## Painel
+## Painel consolidado (PF + PJ)
 
-Mostra um mês (use as setas para navegar):
+A visão integrada: você e a empresa juntos, no mês escolhido (setas no canto). É a tela inicial.
 
-- **Empresa (PJ):** receitas, despesas e o resultado do mês.
-- **Pessoal (PF):** custo de vida e quanto dele foi pago pela empresa.
-- **Empresa → você:** retiradas (Pix para a PF, pró-labore, lucros) somadas aos gastos pessoais pagos pela PJ.
-  O app avisa quando você tirou mais do que a empresa gerou.
-- **Últimos meses:** resultado da empresa, custo de vida e retiradas, mês a mês.
-- **Para onde foi o dinheiro:** despesas por categoria, PF e PJ.
-- **Diagnóstico e dicas:** a IA analisa os totais do mês e sugere ações (precisa da chave da Anthropic).
+- **Alertas:** dívida atrasada com risco, lembretes depois de pagar, contas dos próximos 7 dias, transações para revisar.
+- **Resultado do mês (PF + PJ):** tudo o que entrou de fora (clientes + outras rendas) menos impostos, despesas da
+  empresa, custo de vida e parcelas de dívidas. É a soma de **Ficou na empresa** com **Sobrou para você**.
+- **Posição líquida hoje:** caixa das contas (PF + PJ) + a receber em 30 dias − todas as parcelas de dívidas que faltam
+  − cartões (fatura em aberto + parcelas futuras). Mostra se, acertando tudo hoje, sobraria ou faltaria dinheiro.
+- **Para onde foi o dinheiro:** diagrama de fluxo. À esquerda, de onde veio (clientes, aportes, outras rendas); no
+  meio, a empresa e você; à direita, o destino (impostos, despesas, dívidas, custo de vida e o que sobrou). A espessura
+  de cada faixa é o valor; passe o mouse para ver o número, ou abra **ver em tabela**. Quando saiu mais do que entrou,
+  aparece **“Do caixa”**: a diferença veio do saldo ou de crédito.
+- **Posição de curto prazo:** a conta da posição líquida, linha a linha.
+- **Mistura entre PF e PJ:** gastos pessoais pagos pela empresa, gastos da empresa pagos por você, retiradas ainda sem
+  definição (pró-labore ou lucro) e lançamentos em conta mista sem PF/PJ.
+- **Últimos meses** e **Diagnóstico e dicas** (a IA analisa as três visões e sugere ações; precisa da chave da
+  Anthropic).
+
+<a id="painel-pf"></a>
+
+## Painel pessoal (PF)
+
+Sua vida financeira, incluindo o que vem da empresa.
+
+- **Resumo do mês:** pró-labore, lucros, retiradas, gastos pessoais pagos pela empresa e outras rendas = **renda
+  total**; menos custo de vida, parcelas de dívidas e o que você colocou na empresa = **sobrou**.
+- **Para onde foi o dinheiro pessoal:** gastos por categoria (com estornos abatidos).
+- Indicadores: renda, custo de vida, taxa de poupança, reserva de emergência, renda comprometida com parcelas, quanto
+  veio da empresa e quanto foi investido (veja a tabela em [Indicadores](#indicadores)).
+- **Dívidas e cartões** do lado pessoal, com atalhos para as telas completas.
+
+<a id="painel-pj"></a>
+
+## Painel da empresa (PJ)
+
+O negócio olhado sozinho.
+
+<a id="dre"></a>
+
+### Resultado do mês (DRE gerencial)
+
+| Linha | O que entra |
+|---|---|
+| Receita de serviços | Entradas da empresa (recebimentos de clientes), menos vendas estornadas |
+| Outras receitas | Entradas classificadas como "Outras receitas da empresa" |
+| (−) Impostos | DAS e outros impostos pagos no mês |
+| (−) Despesas da operação | Demais gastos da empresa, inclusive os que você pagou com dinheiro pessoal; estornos abatem |
+| (−) Parcelas de dívidas | Parcelamentos e empréstimos da empresa |
+| **Resultado antes de pagar você** | O que a operação gerou |
+| (−) Pró-labore, lucros, retiradas a definir, gastos pessoais pagos pela empresa | O que foi para você |
+| (+) Aportes e gastos pagos por você | Dinheiro seu que entrou na empresa |
+| **Ficou na empresa** | O que sobrou no caixa da empresa |
+
+É uma visão **gerencial de caixa**, para decidir — não substitui a DRE contábil feita pela contabilidade.
+
+Também mostra despesas por categoria, os últimos 6 meses (receita, resultado e o que foi para você), dívidas e cartões da
+empresa.
+
+<a id="indicadores"></a>
+
+## Indicadores
+
+| Indicador | Como é calculado | Referência usada nas cores |
+|---|---|---|
+| Margem (PJ) | Resultado antes de pagar você ÷ receita | ✓ 20% ou mais · ! de 0 a 20% · ⚠ negativa |
+| Reserva da empresa | Caixa PJ ÷ custo mensal (média de 3 meses de impostos + despesas + parcelas + pró-labore) | ✓ 3 meses ou mais · ! 1 a 3 · ⚠ menos de 1 |
+| Dias de caixa | Caixa PJ ÷ custo mensal × 30 | ✓ 90+ · ! 30 a 90 · ⚠ menos de 30 |
+| Foi para você | O que foi para você ÷ resultado do mês | ✓ até 80% · ! 80 a 100% · ⚠ acima de 100% (tirou mais do que a empresa gerou) |
+| Peso dos impostos | Impostos pagos ÷ receita do mês | — |
+| Fator R | Ver [Impostos](#impostos) | ✓ 28% ou mais |
+| Taxa de poupança (PF) | Sobra ÷ renda total | ✓ 20% ou mais · ! 0 a 20% · ⚠ negativa |
+| Reserva de emergência (PF) | Caixa PF ÷ média de 3 meses do custo de vida + parcelas | ✓ 6 meses ou mais · ! 3 a 6 · ⚠ menos de 3 |
+| Renda comprometida com parcelas | (Próxima parcela de cada dívida + parcelas de cartão do próximo mês) ÷ renda média de 3 meses | ✓ até 30% · ! 30 a 40% · ⚠ acima de 40% |
+| Posição líquida (consolidado) | Caixa + a receber 30 dias − dívidas − cartões | ✓ positiva |
+
+As referências são regras práticas de educação financeira, não metas obrigatórias. O símbolo (✓, !, ⚠) acompanha a cor,
+para não depender só dela.
 
 <a id="transacoes"></a>
 
@@ -74,6 +171,28 @@ Lista tudo o que entrou e saiu, com filtros por mês, conta, escopo, texto e "s�
 - **corrigir** abre a edição: de quem é (PF/PJ), categoria e natureza. Marque **"Aplicar a todas que contêm…"** para
   criar uma regra: ela vale para as transações parecidas que já existem e para as que vierem.
 - **Classificar com IA** aparece quando há transações sem categoria.
+
+<a id="classificacao"></a>
+
+## Classificação automática
+
+Antes de chamar a IA (que custa), o app tenta três classificadores gratuitos, nesta ordem:
+
+1. **Seu histórico:** se você já corrigiu à mão lançamentos do mesmo estabelecimento (o app compara o nome sem "Pix
+   enviado", datas e códigos), repete a sua decisão — desde que você tenha decidido igual em pelo menos 80% das vezes.
+2. **Estabelecimentos conhecidos:** uma lista de lojas e serviços brasileiros (iFood, Uber, 99, postos, supermercados,
+   farmácias, energia, água, telefonia, streaming, Hostinger, Registro.br, Google Ads, ferramentas de SEO…). Ferramentas
+   de trabalho (anúncios, hospedagem, domínio, SEO, contabilidade) vão para a **empresa** mesmo pagas na conta pessoal —
+   e aí o app aponta a mistura. Gastos de consumo (mercado, restaurante) numa conta da empresa ficam para a IA, porque
+   costumam ser gasto pessoal.
+3. **Atividade de quem recebeu (CNAE):** quando o extrato traz o **CNPJ** do recebedor (comum em Pix), o app consulta o
+   cadastro público da Receita pela BrasilAPI (gratuita) e usa a atividade da empresa (restaurante, farmácia,
+   contabilidade…). A consulta fica guardada; cada CNPJ é consultado uma vez. **Só CNPJ** é consultado — CPF nunca — e
+   nada disso vai para a IA. Para desligar, use `CONSULTA_CNPJ=0` no `.env`.
+
+Entradas vindas de um **cliente cadastrado** (pelo CPF/CNPJ das cobranças do Asaas) viram receita da empresa.
+
+O que nenhum deles resolve vai para a IA. Quanto mais você corrige, mais o histórico acerta sozinho.
 
 <a id="receber"></a>
 
@@ -117,6 +236,12 @@ Em **Cadastrar → Nova dívida**:
   curtos, o último dia). **Já pagas** marca as primeiras como quitadas.
 - **Valores diferentes** (ex.: SParcelado da Shopee): uma linha por parcela com data e valor, como
   `20/11/2026 639,88`.
+- **Parcelamento da Receita (Selic):** para parcelamentos de DAS do Simples/MEI. Informe a **parcela básica**, o número
+  de parcelas, o vencimento da 1ª e quantas já pagou. As seguintes vencem no **último dia útil** de cada mês e o valor
+  estimado é a parcela básica + a Selic acumulada + 1% no mês do pagamento (a Selic ao mês é uma estimativa: confira no
+  DAS). Na baixa automática, o app aceita até 5% de diferença quando a saída no extrato é de guia de imposto (DAS, DARF,
+  Receita) e passa a usar o valor efetivamente pago.
+- Nas parcelas iguais, marque **"vence no último dia útil"** quando for o caso.
 - **Valor que você recebeu:** com ele o app calcula os **juros ao mês e ao ano** e a ordem de quitação.
 - **Atraso máximo tolerado** e **o que acontece se passar:** ativam o alerta vermelho.
 - **Lembrete depois de pagar:** aparece a cada parcela paga, até você marcar como feito.
@@ -134,9 +259,43 @@ dinheiro, antecipe essas primeiro (método "avalanche": é o que mais economiza)
 ### Contas fixas
 
 Pró-labore, DAS, INSS do pró-labore, contabilidade, aluguel, escola… Cadastre uma vez com valor aproximado e dia do mês;
-o app cria a previsão deste mês e dos próximos três. Pode ser **a pagar** ou **a receber** (ex.: o pró-labore entra
-na PF como receita e sai da PJ como despesa — cadastre os dois para o fluxo de caixa ficar completo). **Encerrar**
-remove os meses futuros e mantém o histórico.
+o app cria a previsão deste mês e dos próximos três. Pode ser **a pagar** ou **a receber**. O **pró-labore** (categoria
+"Movimentação sócio ↔ empresa" ou descrição com "pró-labore") cadastrado como a pagar da PJ **já entra no fluxo como
+receita da PF**: não cadastre de novo do lado pessoal. **Encerrar** remove os meses futuros e mantém o histórico.
+Na baixa automática, o valor real do extrato substitui o estimado.
+
+> **Compra parcelada em cartão** (ex.: DAS parcelado no cartão): se você **envia as faturas** desse cartão, as parcelas
+> já aparecem em [Cartões](#cartoes) — não cadastre como dívida. Se não envia, cadastre como dívida com a **conta = o
+> cartão**: quando uma fatura daquele mês for lançada, o fluxo conta só a fatura.
+
+<a id="cartoes"></a>
+
+## Cartões
+
+Cadastre cada cartão e envie as faturas; o app calcula o resto.
+
+**Cadastrar:** nome, emissor, de quem é (PF, PJ ou misto), final, **dia do fechamento**, **dia do vencimento**,
+**limite** e a **conta que paga a fatura**. Cartões que já vieram de importações aparecem aqui: complete os dados em
+**Editar cartão**.
+
+**Enviar fatura:** o botão em cada cartão abre o Importar já com o cartão escolhido. Do PDF, o app lê as compras, as
+parcelas ("3/10"), o **vencimento**, o **total** e o **mínimo**, e lança a fatura em [A pagar](#pagar). Quando o
+pagamento aparece no extrato da conta que paga o cartão, a fatura é baixada e a saída vira "pagamento de fatura" (não é
+gasto: as compras já foram contadas). Sem o PDF, use **Lançar fatura à mão** (vencimento e total).
+
+**O que a tela mostra**
+
+- **Fatura em aberto**, **parcelado a vencer** (parcelas que ainda vão cair, compra por compra) e **limite usado**
+  (fatura em aberto + parcelas futuras ÷ limite; o ideal é ficar em até 30%).
+- **Próximas faturas:** a fatura conhecida ou, nos meses seguintes, só as parcelas já contratadas. As compras novas vêm
+  por cima — a **média de compras à vista** dá a ideia de quanto.
+- **Juros e encargos** dos últimos 3 meses (juros, IOF, multa, anuidade, rotativo): qualquer valor aqui é dinheiro
+  jogado fora.
+- As parcelas futuras entram no [Fluxo de caixa](#fluxo) no dia de vencimento do cartão.
+
+> **Cartão Asaas:** a API do Asaas não informa a fatura nem as compras do cartão — só o pagamento da fatura sai no
+> extrato da conta. Para ter as parcelas, envie a fatura (ou cadastre a compra parcelada como dívida, como explicado
+> acima).
 
 <a id="fluxo"></a>
 
@@ -147,11 +306,12 @@ Projeção das próximas **13 semanas**, separada em PJ e PF:
 - **Saldo inicial:** o último saldo conhecido de cada conta (fim do último extrato importado que informa saldo, ou o
   saldo do Asaas pela integração). Contas mistas contam como PF. Contas sem saldo conhecido ficam de fora e são
   avisadas.
-- **Entra:** cobranças em aberto (Asaas) e contas a receber. **Sai:** parcelas, contas fixas e avulsas a pagar.
-  Atrasados entram na primeira semana.
+- **Entra:** cobranças em aberto (Asaas), contas a receber e, na PF, o pró-labore previsto que sai da PJ. **Sai:**
+  parcelas, contas fixas e avulsas a pagar, faturas de cartão conhecidas e, nos meses seguintes, as parcelas de cartão
+  já contratadas. Atrasados entram na primeira semana.
 - O quadro mostra o **menor saldo previsto** e em que semana ele acontece; saldo negativo fica em vermelho.
 
-Gastos do dia a dia que não estão cadastrados (mercado, compras no cartão) não entram: use o saldo projetado como
+Gastos do dia a dia que não estão cadastrados (mercado, compras novas no cartão) não entram: use o saldo projetado como
 teto, não como garantia.
 
 <a id="impostos"></a>
@@ -196,7 +356,10 @@ Para contas que não têm integração: arraste extratos e faturas (OFX, CSV, PD
   interrompe o arquivo em leitura e descarta os que esperavam (o que já entrou, continua).
 - **Nada duplica:** o mesmo arquivo é recusado, e o mesmo período em outro formato (OFX e depois PDF) não repete
   transações.
-- Use **Forçar conta** quando o app não reconhecer o banco ou cair na conta errada.
+- Use **Forçar conta** quando o app não reconhecer o banco ou cair na conta errada. O botão **Enviar fatura** de
+  [Cartões](#cartoes) já abre com o cartão escolhido.
+- **Faturas de cartão:** além das compras, o app lê vencimento, total e mínimo e lança a fatura em A pagar. Parcelas
+  ("3/10") de faturas de meses diferentes não são confundidas com duplicatas, mesmo repetindo a data da compra.
 
 > **Asaas:** depois de conectar a integração, **não importe mais extratos do Asaas por arquivo** — o extrato chega
 > sozinho.
@@ -211,6 +374,7 @@ Cada conta ou cartão que apareceu nos extratos. Em **editar**:
   ficam).
 - **Tipo:** conta corrente, de pagamento, poupança, cartão ou investimentos.
 - **Quero encerrar:** marcação para organizar a limpeza das contas.
+- Cartões de crédito: fechamento, vencimento, limite e conta que paga ficam em [Cartões](#cartoes).
 - **Excluir:** apaga a conta e todas as transações dela (dá para reimportar depois).
 
 O quadro **Descobrir todas as contas no seu nome** explica como usar o Registrato (Banco Central) para achar contas
@@ -297,10 +461,13 @@ console da Anthropic, onde também dá para definir um **limite mensal de gasto*
 
 1. Abra **A receber**: cobre quem está vencido.
 2. Abra **Transações → só para revisar** e resolva os destaques (principalmente retiradas do sócio e mistura).
-3. Importe os extratos das contas sem integração (ou a cada 15 dias).
+3. Importe os extratos das contas sem integração (ou a cada 15 dias) e as **faturas** que fecharam.
 
 **Todo mês**
 
-1. No **Painel**, compare o resultado da empresa com o que saiu da empresa para você.
-2. Em **Impostos**, confira o Fator R e o DAS estimado antes de a contabilidade enviar a guia.
-3. Gere o **Diagnóstico e dicas** do mês.
+1. No **Consolidado**, veja o fluxo do dinheiro e a posição líquida.
+2. No painel **Empresa (PJ)**, compare o resultado antes de pagar você com o que foi para você (indicador "Foi para
+   você") e a reserva da empresa.
+3. No painel **Pessoal (PF)**, acompanhe taxa de poupança, reserva de emergência e renda comprometida com parcelas.
+4. Em **Impostos**, confira o Fator R e o DAS estimado antes de a contabilidade enviar a guia.
+5. Gere o **Diagnóstico e dicas** do mês.

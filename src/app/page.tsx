@@ -1,23 +1,25 @@
-import { connection } from "next/server";
 import { and, desc, eq } from "drizzle-orm";
 import Link from "next/link";
+import { connection } from "next/server";
 import { Suspense } from "react";
 import { BarrasMensais } from "@/components/barras-mensais";
-import { Cartao, Carregando, Valor } from "@/components/ui";
-import { despesasPorCategoria, mesMaisRecenteComDados, periodoDoMes, resumoDoPeriodo, serieMensal, type LinhaCategoria } from "@/lib/consultas";
-import { obterDb } from "@/lib/db";
-import { analises } from "@/lib/db/schema";
-import { deslocarMes, formatarMes, formatarMoeda } from "@/lib/formato";
-import { EsquemaAnalise } from "@/lib/ia/analise";
-import { iaDisponivel } from "@/lib/ia/cliente";
+import { FluxoDinheiro, type NoFluxo } from "@/components/fluxo-dinheiro";
 import { LinkAjuda } from "@/components/link-ajuda";
-import { indicadoresFiscais, resumoRecebiveis } from "@/lib/fiscal/indicadores";
-import { atualizarCompromissos, contasAPagar, lembretesPendentes, resumoDividas } from "@/lib/compromissos/servico";
+import { SeletorMes } from "@/components/seletor-mes";
+import { Cartao, Carregando, Indicador, LinhaValor, Valor } from "@/components/ui";
+import { obterDb } from "@/lib/db";
+import { analises, transacoes } from "@/lib/db/schema";
+import { formatarMes } from "@/lib/formato";
+import { iaDisponivel } from "@/lib/ia/cliente";
+import { mesDeReferencia } from "@/lib/visoes/consultas";
+import { dadosConsolidado, fluxoDoMes } from "@/lib/visoes/paineis";
+import { periodoDoMes } from "@/lib/consultas";
+import { AnaliseSalva } from "./analise-salva";
 import { BotaoAnalise } from "./botao-analise";
 
 type Busca = Promise<Record<string, string | string[] | undefined>>;
 
-export default function Painel({ searchParams }: { searchParams: Busca }) {
+export default function PainelConsolidado({ searchParams }: { searchParams: Busca }) {
   return (
     <Suspense fallback={<Carregando />}>
       <Conteudo searchParams={searchParams} />
@@ -29,278 +31,155 @@ async function Conteudo({ searchParams }: { searchParams: Busca }) {
   await connection();
   const db = obterDb();
   const sp = await searchParams;
-  const pedido = typeof sp.mes === "string" && /^\d{4}-\d{2}$/.test(sp.mes) ? sp.mes : null;
-  const mes = pedido ?? (await mesMaisRecenteComDados(db));
-
-  if (!mes) {
-    return (
-      <Cartao>
-        <h1 className="text-lg font-semibold">Bem-vindo</h1>
-        <p className="mt-2 text-sm text-suave">
-          Comece importando extratos e faturas das suas contas pessoais e da empresa. O app junta tudo, separa o que é PF
-          do que é PJ e mostra onde as duas coisas estão se misturando.
-        </p>
-        <Link href="/importar" className="mt-4 inline-block rounded-md bg-foreground px-3 py-1.5 text-sm text-background">
-          Importar extratos
-        </Link>
-      </Cartao>
-    );
-  }
-
+  if ((await db.$count(transacoes)) === 0) return <BoasVindas />;
+  const mes = await mesDeReferencia(db, sp.mes);
   const periodo = periodoDoMes(mes);
-  await atualizarCompromissos(db);
-  const [resumo, categorias, serie, ultimaAnalise, recebiveis, fiscal, aPagar, dividasAtivas, lembretes] = await Promise.all([
-    resumoDoPeriodo(db, periodo),
-    despesasPorCategoria(db, periodo),
-    serieMensal(db, 6, mes),
+  const [d, ultimaAnalise] = await Promise.all([
+    dadosConsolidado(db, mes),
     db.query.analises.findFirst({
       where: and(eq(analises.periodoInicio, periodo.inicio), eq(analises.periodoFim, periodo.fim)),
       orderBy: [desc(analises.id)],
     }),
-    resumoRecebiveis(db),
-    indicadoresFiscais(db),
-    contasAPagar(db, 7),
-    resumoDividas(db),
-    lembretesPendentes(db),
   ]);
-  const dividasEmRisco = dividasAtivas.filter((d) => d.diasAtraso > 0 && d.diasTolerancia);
-  const pagarSemana = aPagar.pendentes;
-  const temRecebiveis = recebiveis.aReceber30dQtd + recebiveis.vencidoQtd > 0 || recebiveis.recebidoMesCentavos > 0;
-  const temFiscal = fiscal.mesesComDados > 0 && fiscal.perfil.proLaboreMensalCentavos > 0;
-  const resultadoPj = resumo.pjReceitas - resumo.pjDespesas;
-  const saiuDaEmpresa = resumo.retiradas + resumo.pessoalNaPj;
+  const { pj, pf, total } = d.atual;
+  const fluxo = fluxoDoMes(pj, pf);
+  const p = d.pendencias;
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold">
-          Painel de {formatarMes(mes)} <LinkAjuda secao="painel" />
-        </h1>
-        <div className="flex gap-3 text-sm">
-          <Link href={`/?mes=${deslocarMes(mes, -1)}`} className="underline">
-            ← {formatarMes(deslocarMes(mes, -1))}
-          </Link>
-          <Link href={`/?mes=${deslocarMes(mes, 1)}`} className="underline">
-            {formatarMes(deslocarMes(mes, 1))} →
-          </Link>
+        <div>
+          <h1 className="text-xl font-semibold">
+            Consolidado · {formatarMes(mes)} <LinkAjuda secao="painel" />
+          </h1>
+          <p className="text-sm text-suave">Você e a empresa juntos: de onde veio o dinheiro, para onde foi e o que sobrou em cada lado.</p>
         </div>
+        <SeletorMes caminho="/" mes={mes} />
       </div>
 
-      {dividasEmRisco.map((d) => (
-        <Link key={d.id} href="/pagar" className="block rounded-md border border-negativo/50 bg-negativo/10 p-3 text-sm">
-          <strong>⚠ {d.nome}: parcela atrasada há {d.diasAtraso} dia(s)</strong> — limite de {d.diasTolerancia} dias. {d.consequenciaAtraso}
+      {d.dividasEmRisco.map((dv) => (
+        <Link key={dv.id} href="/pagar" className="block rounded-md border border-negativo/50 bg-negativo/10 p-3 text-sm">
+          <strong>⚠ {dv.nome}: parcela atrasada há {dv.diasAtraso} dia(s)</strong> — limite de {dv.diasTolerancia} dias. {dv.consequenciaAtraso}
         </Link>
       ))}
-      {lembretes.length > 0 && (
+      {d.lembretes.length > 0 && (
         <Link href="/pagar" className="block rounded-md border border-alerta/40 bg-alerta/10 p-3 text-sm">
-          📎 {lembretes.length} lembrete(s) depois de pagar (ex.: enviar comprovante). Ver em A pagar.
+          📎 {d.lembretes.length} lembrete(s) depois de pagar (ex.: enviar comprovante). Ver em A pagar.
         </Link>
       )}
-      {pagarSemana.length > 0 && (
+      {d.aPagarSemana.length > 0 && (
         <Link href="/pagar" className="block rounded-md border border-borda bg-superficie p-3 text-sm hover:border-foreground/30">
-          A pagar nos próximos 7 dias:{" "}
-          <strong>{pagarSemana.length} conta(s)</strong>, <Valor centavos={pagarSemana.reduce((t, p) => t + p.valorCentavos, 0)} />
-          {pagarSemana.some((p) => p.status === "vencido") && <span className="text-negativo"> · há contas vencidas</span>}
+          A pagar nos próximos 7 dias: <strong>{d.aPagarSemana.length} conta(s)</strong>,{" "}
+          <Valor centavos={d.aPagarSemana.reduce((t, x) => t + x.valorCentavos, 0)} />
+          {d.aPagarSemana.some((x) => x.status === "vencido") && <span className="text-negativo"> · há contas vencidas</span>}
         </Link>
       )}
-      {(resumo.paraRevisar > 0 || resumo.semEscopo > 0) && (
+      {(p.paraRevisar > 0 || p.semEscopo > 0) && (
         <p className="rounded-md border border-alerta/40 bg-alerta/10 p-3 text-sm">
-          ⚠ {resumo.paraRevisar > 0 && <>{resumo.paraRevisar} transação(ões) para revisar. </>}
-          {resumo.semEscopo > 0 && <>{resumo.semEscopo} sem definição de PF/PJ. </>}
+          ⚠ {p.paraRevisar > 0 && <>{p.paraRevisar} transação(ões) para revisar. </>}
+          {p.semEscopo > 0 && <>{p.semEscopo} sem definição de PF/PJ — ficam fora das contas abaixo. </>}
           <Link href={`/transacoes?mes=${mes}&revisar=1`} className="underline">
             Revisar agora
           </Link>
         </p>
       )}
 
-      <div className="grid gap-3 md:grid-cols-3">
-        <Cartao titulo={<span className="text-pj">Empresa (PJ)</span>}>
-          <div className="text-2xl font-semibold">
-            <Valor centavos={resultadoPj} sinal />
-          </div>
-          <div className="mt-1 text-xs text-suave">resultado do mês (receitas − despesas)</div>
-          <dl className="mt-3 grid grid-cols-2 gap-1 text-sm">
-            <dt className="text-suave">Receitas</dt>
-            <dd className="text-right"><Valor centavos={resumo.pjReceitas} /></dd>
-            <dt className="text-suave">Despesas</dt>
-            <dd className="text-right"><Valor centavos={resumo.pjDespesas} /></dd>
-          </dl>
-        </Cartao>
-        <Cartao titulo={<span className="text-pf">Pessoal (PF)</span>}>
-          <div className="text-2xl font-semibold">
-            <Valor centavos={resumo.pfDespesas} />
-          </div>
-          <div className="mt-1 text-xs text-suave">custo de vida no mês</div>
-          <dl className="mt-3 grid grid-cols-2 gap-1 text-sm">
-            <dt className="text-suave">Outras receitas PF</dt>
-            <dd className="text-right"><Valor centavos={resumo.pfReceitas} /></dd>
-            <dt className="text-suave">Pagos pela empresa</dt>
-            <dd className="text-right"><Valor centavos={resumo.pessoalNaPj} /></dd>
-          </dl>
-        </Cartao>
-        <Cartao titulo="Empresa → você">
-          <div className="text-2xl font-semibold">
-            <Valor centavos={saiuDaEmpresa} />
-          </div>
-          <div className="mt-1 text-xs text-suave">
-            {resultadoPj > 0 && saiuDaEmpresa > resultadoPj
-              ? `⚠ ${formatarMoeda(saiuDaEmpresa - resultadoPj)} acima do que a empresa gerou`
-              : resultadoPj <= 0 && saiuDaEmpresa > 0
-                ? "⚠ a empresa não gerou resultado e mesmo assim houve retirada"
-                : "retiradas + gastos pessoais pagos pela PJ"}
-          </div>
-          <dl className="mt-3 grid grid-cols-2 gap-1 text-sm">
-            <dt className="text-suave">Retiradas (Pix, pró-labore, lucros)</dt>
-            <dd className="text-right"><Valor centavos={resumo.retiradas} /></dd>
-            <dt className="text-suave">Aportes seus na empresa</dt>
-            <dd className="text-right"><Valor centavos={resumo.aportes} /></dd>
-            <dt className="text-suave">Gastos da PJ pagos por você</dt>
-            <dd className="text-right"><Valor centavos={resumo.pjNaPf} /></dd>
-          </dl>
-        </Cartao>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Indicador
+          rotulo="Resultado do mês (PF + PJ)"
+          valor={<Valor centavos={total.resultado} sinal />}
+          detalhe={total.resultado >= 0 ? "entrou mais do que saiu" : "saiu mais do que entrou"}
+          tom={total.resultado >= 0 ? "bom" : "ruim"}
+        />
+        <Indicador rotulo="Ficou na empresa" valor={<Valor centavos={total.ficouNaEmpresa} sinal />} detalhe="depois de pagar você" href={`/pj?mes=${mes}`} />
+        <Indicador rotulo="Sobrou para você" valor={<Valor centavos={total.sobrouParaVoce} sinal />} detalhe="depois do custo de vida e das dívidas" href={`/pf?mes=${mes}`} />
+        <Indicador
+          rotulo="Posição líquida hoje"
+          valor={<Valor centavos={d.posicaoLiquida} sinal />}
+          detalhe="caixa + a receber − dívidas − cartões"
+          tom={d.posicaoLiquida >= 0 ? "bom" : "ruim"}
+        />
       </div>
 
-      {(temRecebiveis || temFiscal) && (
-        <div className="grid gap-3 md:grid-cols-3">
-          {temRecebiveis && (
-            <Link href="/receber" className="rounded-lg border border-borda bg-superficie p-4 hover:border-foreground/30">
-              <div className="text-sm text-suave">A receber em 30 dias</div>
-              <div className="text-lg font-semibold"><Valor centavos={recebiveis.aReceber30dCentavos} /></div>
-              <div className="text-xs text-suave">{recebiveis.aReceber30dQtd} cobrança(s)</div>
-            </Link>
-          )}
-          {temRecebiveis && (
-            <Link href="/receber" className="rounded-lg border border-borda bg-superficie p-4 hover:border-foreground/30">
-              <div className="text-sm text-suave">Cobranças vencidas</div>
-              <div className={`text-lg font-semibold ${recebiveis.vencidoCentavos > 0 ? "text-negativo" : ""}`}>
-                <Valor centavos={recebiveis.vencidoCentavos} />
-              </div>
-              <div className="text-xs text-suave">{recebiveis.vencidoQtd} cobrança(s)</div>
-            </Link>
-          )}
-          {temFiscal && (
-            <Link href="/impostos" className="rounded-lg border border-borda bg-superficie p-4 hover:border-foreground/30">
-              <div className="text-sm text-suave">Fator R · Anexo {fiscal.diagnostico.anexo}</div>
-              <div className={`text-lg font-semibold ${fiscal.diagnostico.fatorR >= 0.28 ? "text-positivo" : "text-negativo"}`}>
-                {(fiscal.diagnostico.fatorR * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%
-              </div>
-              <div className="text-xs text-suave">DAS estimado do mês: <Valor centavos={fiscal.diagnostico.dasEstimadoCentavos} /></div>
-            </Link>
-          )}
-        </div>
-      )}
-
-      {serie.length > 1 && (
-        <Cartao titulo="Últimos meses">
-          <div className="grid gap-6 md:grid-cols-3">
-            <BarrasMensais titulo="Resultado da empresa" cor="pj" dados={serie.map((s) => ({ mes: s.mes, valor: s.pjResultado }))} />
-            <BarrasMensais titulo="Custo de vida (PF)" cor="pf" dados={serie.map((s) => ({ mes: s.mes, valor: s.pfDespesas }))} />
-            <BarrasMensais titulo="Empresa → você" cor="alerta" dados={serie.map((s) => ({ mes: s.mes, valor: s.retiradas }))} />
-          </div>
-        </Cartao>
-      )}
+      <Cartao titulo={<>Para onde foi o dinheiro em {formatarMes(mes)}</>}>
+        <FluxoDinheiro titulo={`Fluxo do dinheiro em ${formatarMes(mes)}`} nos={fluxo.nos as unknown as NoFluxo[]} ligacoes={fluxo.ligacoes} />
+        <p className="mt-2 text-xs text-suave">
+          Compras no cartão contam na data da compra; transferências entre suas contas, pagamento de fatura e aplicações não são
+          gasto. “Do caixa” aparece quando saiu mais do que entrou (o dinheiro veio do saldo ou de crédito).
+        </p>
+      </Cartao>
 
       <div className="grid gap-3 md:grid-cols-2">
-        <ListaCategorias titulo="Para onde foi o dinheiro pessoal" cor="pf" linhas={categorias.filter((c) => c.escopo === "PF")} mes={mes} escopo="PF" />
-        <ListaCategorias titulo="Despesas da empresa" cor="pj" linhas={categorias.filter((c) => c.escopo === "PJ")} mes={mes} escopo="PJ" />
+        <Cartao titulo="Posição de curto prazo">
+          <div className="text-sm">
+            <LinhaValor rotulo={<span className="text-pj">Caixa da empresa</span>} centavos={d.saldos.PJ} />
+            <LinhaValor rotulo={<span className="text-pf">Seu caixa</span>} centavos={d.saldos.PF} />
+            <LinhaValor rotulo="A receber em 30 dias" centavos={d.aReceber} />
+            <LinhaValor rotulo="(−) Dívidas a pagar (todas as parcelas)" centavos={-d.dividasRestantes} />
+            <LinhaValor rotulo="(−) Cartões: fatura em aberto + parcelas futuras" centavos={-d.cartoesAVencer} />
+            <LinhaValor rotulo="Posição líquida" centavos={d.posicaoLiquida} destaque sinal />
+          </div>
+          {d.saldos.contasSemSaldo > 0 && (
+            <p className="mt-2 text-xs text-suave">{d.saldos.contasSemSaldo} conta(s) sem saldo conhecido ficaram fora do caixa.</p>
+          )}
+        </Cartao>
+        <Cartao titulo="Mistura entre PF e PJ no mês">
+          <div className="text-sm">
+            <LinhaValor rotulo="Gastos pessoais pagos pela empresa" centavos={pj.pessoalNaPj} />
+            <LinhaValor rotulo="Gastos da empresa pagos por você" centavos={pj.pagoPeloSocio} />
+            <LinhaValor rotulo="Retiradas (Pix da PJ para você)" centavos={pj.retiradas} />
+          </div>
+          <ul className="mt-3 space-y-1 text-xs text-suave">
+            {p.retiradasIndefinidas > 0 && (
+              <li>
+                ⚠ {p.retiradasIndefinidas} retirada(s) sem definir se é pró-labore ou lucro —{" "}
+                <Link href={`/transacoes?mes=${mes}&revisar=1`} className="underline">definir</Link> (muda o imposto e o Fator R).
+              </li>
+            )}
+            {p.emContaMista > 0 && <li>⚠ {p.emContaMista} lançamento(s) em conta mista sem PF/PJ.</li>}
+            {pj.pessoalNaPj === 0 && p.retiradasIndefinidas === 0 && p.emContaMista === 0 && <li>✓ Nada misturado neste mês.</li>}
+          </ul>
+        </Cartao>
       </div>
 
+      {d.serie.some((s) => s.total.entradas !== 0 || s.total.custoDeVida !== 0) && (
+        <Cartao titulo="Últimos meses">
+          <div className="grid gap-6 md:grid-cols-3">
+            <BarrasMensais titulo="Resultado PF + PJ" cor="neutro" dados={d.serie.map((s) => ({ mes: s.mes, valor: s.total.resultado }))} />
+            <BarrasMensais titulo="Ficou na empresa" cor="pj" dados={d.serie.map((s) => ({ mes: s.mes, valor: s.total.ficouNaEmpresa }))} />
+            <BarrasMensais titulo="Sobrou para você" cor="pf" dados={d.serie.map((s) => ({ mes: s.mes, valor: s.total.sobrouParaVoce }))} />
+          </div>
+        </Cartao>
+      )}
+
       <Cartao titulo="Diagnóstico e dicas">
-        {ultimaAnalise ? <AnaliseSalva conteudo={ultimaAnalise.conteudo} /> : (
+        {ultimaAnalise ? (
+          <AnaliseSalva conteudo={ultimaAnalise.conteudo} />
+        ) : (
           <p className="mb-3 text-sm text-suave">
-            A IA olha os totais do mês, os gastos recorrentes e as maiores saídas e sugere o que ajustar.
+            A IA olha os números do mês (PF, PJ e o que passa de um para o outro), os gastos recorrentes e as maiores saídas, e
+            sugere o que ajustar.
           </p>
         )}
         <div className="mt-4">
-          {iaDisponivel() ? (
-            <BotaoAnalise mes={mes} temAnalise={Boolean(ultimaAnalise)} />
-          ) : (
-            <p className="text-sm text-suave">Configure a ANTHROPIC_API_KEY para gerar análises.</p>
-          )}
+          {iaDisponivel() ? <BotaoAnalise mes={mes} temAnalise={Boolean(ultimaAnalise)} /> : <p className="text-sm text-suave">Configure a ANTHROPIC_API_KEY para gerar análises.</p>}
         </div>
       </Cartao>
     </div>
   );
 }
 
-function ListaCategorias({ titulo, cor, linhas, mes, escopo }: { titulo: string; cor: "pf" | "pj"; linhas: LinhaCategoria[]; mes: string; escopo: "PF" | "PJ" }) {
-  const max = Math.max(1, ...linhas.map((l) => l.totalCentavos));
-  const total = linhas.reduce((s, l) => s + l.totalCentavos, 0);
+function BoasVindas() {
   return (
-    <Cartao titulo={titulo}>
-      {linhas.length === 0 ? (
-        <p className="text-sm text-suave">Nada classificado ainda.</p>
-      ) : (
-        <ul className="space-y-2 text-sm">
-          {linhas.slice(0, 10).map((l) => (
-            <li key={l.categoriaId ?? "sem"}>
-              <div className="flex justify-between gap-2">
-                <span>{l.nome}</span>
-                <span className="numero">
-                  {formatarMoeda(l.totalCentavos)} <span className="text-xs text-suave">{Math.round((l.totalCentavos / total) * 100)}%</span>
-                </span>
-              </div>
-              <div className="mt-1 h-1.5 rounded-full bg-foreground/5">
-                <div className={`h-1.5 rounded-full ${cor === "pf" ? "bg-pf" : "bg-pj"}`} style={{ width: `${(l.totalCentavos / max) * 100}%` }} />
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-      <Link href={`/transacoes?mes=${mes}&escopo=${escopo}`} className="mt-3 inline-block text-xs underline">
-        ver transações
+    <Cartao>
+      <h1 className="text-lg font-semibold">Bem-vindo</h1>
+      <p className="mt-2 text-sm text-suave">
+        Comece importando extratos e faturas das suas contas pessoais e da empresa. O app junta tudo, separa o que é PF do que é
+        PJ e mostra o caminho do dinheiro entre os dois.
+      </p>
+      <Link href="/importar" className="mt-4 inline-block rounded-md bg-foreground px-3 py-1.5 text-sm text-background">
+        Importar extratos
       </Link>
     </Cartao>
-  );
-}
-
-function AnaliseSalva({ conteudo }: { conteudo: string }) {
-  const lido = EsquemaAnalise.safeParse(JSON.parse(conteudo));
-  if (!lido.success) return <p className="text-sm text-suave">Análise salva em formato antigo. Gere outra.</p>;
-  const a = lido.data;
-  const corGravidade = { alta: "text-negativo", media: "text-alerta", baixa: "text-suave" } as const;
-  return (
-    <div className="space-y-4 text-sm">
-      <p>{a.resumo}</p>
-      {a.alertas.length > 0 && (
-        <div>
-          <h3 className="mb-1 font-medium">Alertas</h3>
-          <ul className="space-y-2">
-            {a.alertas.map((al, i) => (
-              <li key={i}>
-                <span className={`mr-1 text-xs font-medium uppercase ${corGravidade[al.gravidade]}`}>{al.gravidade}</span>
-                <strong>{al.titulo}.</strong> {al.detalhe}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {a.dicas.length > 0 && (
-        <div>
-          <h3 className="mb-1 font-medium">Dicas</h3>
-          <ul className="space-y-2">
-            {a.dicas.map((d, i) => (
-              <li key={i}>
-                <strong>{d.titulo}.</strong> {d.detalhe}{" "}
-                <span className="text-suave">→ {d.acao}</span>
-                {d.economia_mensal_estimada ? (
-                  <span className="ml-1 text-positivo">(~{formatarMoeda(d.economia_mensal_estimada * 100)}/mês)</span>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {a.perguntas_para_o_contador.length > 0 && (
-        <div>
-          <h3 className="mb-1 font-medium">Perguntas para levar ao contador</h3>
-          <ul className="ml-5 list-disc space-y-1">
-            {a.perguntas_para_o_contador.map((p, i) => (
-              <li key={i}>{p}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
   );
 }

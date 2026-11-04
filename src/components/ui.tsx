@@ -41,3 +41,54 @@ export function Botao(props: React.ButtonHTMLAttributes<HTMLButtonElement>) {
 }
 
 export const estiloCampo = "rounded-md border border-borda bg-superficie px-2 py-1.5 text-sm";
+
+/**
+ * Indicador (KPI): número em destaque, com rótulo e uma linha de contexto. O tom só reforça
+ * o texto (nunca é a única pista): use junto com um detalhe que diga se está bom ou ruim.
+ */
+export function Indicador({
+  rotulo,
+  valor,
+  detalhe,
+  tom,
+  href,
+}: {
+  rotulo: string;
+  valor: ReactNode;
+  detalhe?: ReactNode;
+  tom?: "bom" | "atencao" | "ruim";
+  href?: string;
+}) {
+  const cor = tom === "bom" ? "text-positivo" : tom === "ruim" ? "text-negativo" : tom === "atencao" ? "text-alerta" : "";
+  const icone = tom === "bom" ? "✓ " : tom === "ruim" ? "⚠ " : tom === "atencao" ? "! " : "";
+  const corpo = (
+    <>
+      <div className="text-xs text-suave">{rotulo}</div>
+      <div className={`numero mt-0.5 text-xl font-semibold ${cor}`}>{valor}</div>
+      {detalhe && (
+        <div className="mt-0.5 text-xs text-suave">
+          {icone && <span className={cor}>{icone}</span>}
+          {detalhe}
+        </div>
+      )}
+    </>
+  );
+  const estilo = "block rounded-lg border border-borda bg-superficie p-3";
+  return href ? (
+    <a href={href} className={`${estilo} hover:border-foreground/30`}>
+      {corpo}
+    </a>
+  ) : (
+    <div className={estilo}>{corpo}</div>
+  );
+}
+
+/** Linha "rótulo ........ valor" de demonstrativos (DRE, resumo do mês). */
+export function LinhaValor({ rotulo, centavos, nivel = 0, destaque = false, sinal = false }: { rotulo: ReactNode; centavos: number; nivel?: 0 | 1; destaque?: boolean; sinal?: boolean }) {
+  return (
+    <div className={`flex justify-between gap-3 py-1 ${destaque ? "border-t border-borda font-semibold" : ""} ${nivel ? "pl-4 text-suave" : ""}`}>
+      <span>{rotulo}</span>
+      <Valor centavos={centavos} sinal={sinal} />
+    </div>
+  );
+}

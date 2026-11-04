@@ -1,7 +1,8 @@
 const moeda = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
 export function formatarMoeda(centavos: number): string {
-  return moeda.format(centavos / 100);
+  // `|| 0` evita o "-R$ 0,00" do zero negativo.
+  return moeda.format(centavos / 100 || 0);
 }
 
 export function formatarData(iso: string): string {
@@ -44,3 +45,16 @@ export const ROTULOS_TIPO_CONTA: Record<string, string> = {
   cartao_credito: "Cartão de crédito",
   investimento: "Investimentos",
 };
+
+/** 0,1234 → "12,3%". Null vira "—". */
+export function formatarPercentual(fracao: number | null, casas = 1): string {
+  if (fracao === null || !Number.isFinite(fracao)) return "—";
+  return `${(fracao * 100).toLocaleString("pt-BR", { maximumFractionDigits: casas, minimumFractionDigits: 0 })}%`;
+}
+
+/** Meses de cobertura: 2,4 → "2,4 meses". */
+export function formatarMeses(meses: number | null): string {
+  if (meses === null || !Number.isFinite(meses)) return "—";
+  const v = Math.max(meses, 0).toLocaleString("pt-BR", { maximumFractionDigits: 1 });
+  return `${v} ${meses >= 0.95 && meses < 1.05 ? "mês" : "meses"}`;
+}

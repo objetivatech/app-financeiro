@@ -26,12 +26,14 @@
 - [x] **Dívidas e compromissos a pagar** (v0.5.0): alerta de atraso, lembrete pós-pagamento, juros, ordem de quitação
 - [x] **Recorrências** (v0.5.0): previstos do mês, conciliados com o extrato
 - [x] **Fluxo de caixa projetado** (v0.5.0): 13 semanas, PF e PJ
-- [ ] **Cartões de crédito:** limite, fechamento e vencimento; faturas futuras a partir das parcelas
+- [x] **Cartões de crédito** (v0.6.0): limite, fechamento e vencimento; leitura da fatura; parcelas futuras no fluxo
+- [x] **Painéis separados** (v0.6.0): Consolidado (com fluxo do dinheiro), Pessoal (PF) e Empresa (PJ); menu agrupado
+- [x] **Classificadores complementares** (v0.6.0): histórico, estabelecimentos conhecidos, CNPJ → CNAE (BrasilAPI)
 - [ ] **Lançamento rápido** no navegador
 - [ ] Integração com o **Mercado Pago**
 
 ## Fase 3 — consultora
-- [ ] Painel de indicadores (taxa de poupança, reserva em meses, comprometimento de renda, dias de caixa, margem)
+- [x] Painel de indicadores (v0.6.0): taxa de poupança, reserva em meses, comprometimento de renda, dias de caixa, margem
 - [ ] "Skill" de gestão financeira + chat com consultas e simulações (carro, pró-labore × Fator R, quitação)
 - [ ] Metas: troca de carro, reserva de caixa da PJ, reserva/investimentos PF
 
@@ -44,7 +46,9 @@
 ### Fase 2 — completar a entrada de dados
 - [ ] Planilhas Excel (XLSX) — BTG e XP exportam assim
 - [ ] Importar o relatório do Registrato (CCS/SCR) para montar o inventário de contas e cartões automaticamente
-- [ ] Faturas: tratar parcelas futuras como compromissos (contas a pagar)
+- [x] Faturas: parcelas futuras projetadas (v0.6.0)
+- [ ] Faturas: MCC (código de categoria do estabelecimento) quando o emissor informar
+- [ ] Enriquecimento pago (Pluggy/Belvo) se os classificadores gratuitos não bastarem — ver `docs/CLASSIFICADORES.md`
 - [ ] Testar e ajustar com extratos reais de cada instituição do piloto (Asaas, Mercado Pago, PagBank, Neon, Caixa,
       BTG, BS2, Nubank, Efí, XP, PayPal, Maree, 99Pay, Wise e cartões); confirmar os códigos COMPE do catálogo
 - [ ] Wise/PayPal: transações em moeda estrangeira (conversão para BRL)
