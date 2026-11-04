@@ -575,6 +575,53 @@ describe.skipIf(!url)("importação + classificação no banco", () => {
     expect(c.vinculados.map((v) => v.final)).toEqual(["9876"]);
   });
 
+  it("Mercado Pago: token sem acesso a /users/me segue com o ID do token; tudo recusado vira erro explicado", async () => {
+    let recusarTudo = false;
+    const servidor = createServer((req, res) => {
+      const json = (status: number, dados: unknown) => {
+        res.writeHead(status, { "content-type": "application/json" });
+        res.end(JSON.stringify(dados));
+      };
+      const url = req.url ?? "";
+      const recusa = { code: "PA_UNAUTHORIZED_RESULT_FROM_POLICIES", status: 403, message: "At least one policy returned UNAUTHORIZED.", blocked_by: "PolicyAgent" };
+      if (url.startsWith("/users/me") || recusarTudo) return json(403, recusa);
+      if (url.startsWith("/v1/payments/search")) {
+        return json(200, {
+          paging: { total: 2, limit: 50, offset: 0 },
+          results: [
+            { id: 701, status: "approved", collector_id: 4242, transaction_amount: 80, date_created: `${somarDias(hojeBrasil(), -2)}T09:00:00.000-03:00`, date_approved: `${somarDias(hojeBrasil(), -2)}T09:00:00.000-03:00` },
+            { id: 702, status: "approved", collector_id: 1, transaction_amount: 10, date_created: `${somarDias(hojeBrasil(), -2)}T09:00:00.000-03:00` },
+          ],
+        });
+      }
+      if (url.startsWith("/v1/account/release_report/list")) return json(200, []);
+      if (req.method === "POST") return json(202, {});
+      json(404, {});
+    });
+    await new Promise<void>((ok) => servidor.listen(0, ok));
+    process.env.MERCADOPAGO_ACCESS_TOKEN = "APP_USR-123-110426-abcdef-4242";
+    process.env.MERCADOPAGO_BASE_URL = `http://127.0.0.1:${(servidor.address() as { port: number }).port}`;
+    try {
+      await db.delete(schema.integracoes).where(sql`id = 'mercadopago'`);
+      const r = await sincronizarMercadoPago(db, { esperaRelatorioMs: 0 });
+      expect(r.pagamentos).toBe(1);
+      expect(r.avisos.join(" ")).toMatch(/PF ou PJ em Contas/);
+      expect(await db.query.compromissos.findFirst({ where: (c, { and, eq }) => and(eq(c.origem, "mercadopago"), eq(c.idExterno, "701")) })).toBeTruthy();
+      expect((await db.query.integracoes.findFirst({ where: (i, { eq }) => eq(i.id, "mercadopago") }))?.status).toBe("ok");
+
+      recusarTudo = true;
+      await expect(sincronizarMercadoPago(db, { esperaRelatorioMs: 0 })).rejects.toThrow(/PRODUÇÃO/);
+      expect((await db.query.integracoes.findFirst({ where: (i, { eq }) => eq(i.id, "mercadopago") }))?.status).toBe("erro");
+    } finally {
+      delete process.env.MERCADOPAGO_ACCESS_TOKEN;
+      delete process.env.MERCADOPAGO_BASE_URL;
+      servidor.close();
+      await db.delete(schema.integracoes).where(sql`id = 'mercadopago'`);
+      await db.delete(schema.compromissos).where(sql`origem = 'mercadopago'`);
+      await db.delete(schema.contas).where(sql`instituicao_id = 'mercadopago'`);
+    }
+  });
+
   it("Mercado Pago: conta pelo CNPJ, pagamentos recebidos e extrato pelo relatório (API falsa)", async () => {
     const csv = [
       "DATE;SOURCE_ID;EXTERNAL_REFERENCE;RECORD_TYPE;DESCRIPTION;NET_CREDIT_AMOUNT;NET_DEBIT_AMOUNT;PAYMENT_METHOD;BALANCE_AMOUNT",
