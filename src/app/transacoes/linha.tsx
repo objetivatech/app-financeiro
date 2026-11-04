@@ -40,6 +40,7 @@ export function LinhaTransacao(props: {
           <div>{t.descricao}</div>
           <div className="text-xs text-suave">
             {t.contaApelido}
+            {t.finalCartao && t.finalCartao !== t.contaFinal ? ` · cartão final ${t.finalCartao}` : ""}
             {t.parcelaAtual && t.parcelaTotal ? ` · parcela ${t.parcelaAtual}/${t.parcelaTotal}` : ""}
           </div>
           {props.avisos?.map((a) => (

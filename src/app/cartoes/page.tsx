@@ -3,13 +3,13 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 import { BarrasMensais } from "@/components/barras-mensais";
 import { LinkAjuda } from "@/components/link-ajuda";
-import { Cartao, Carregando, Indicador, SeloEscopo, Valor } from "@/components/ui";
+import { Cartao, Carregando, estiloCampo, Indicador, SeloEscopo, Valor } from "@/components/ui";
 import { resumoCartoes, type ResumoCartao } from "@/lib/cartoes/servico";
 import { atualizarCompromissos } from "@/lib/compromissos/servico";
 import { obterDb } from "@/lib/db";
 import { formatarData, formatarMoeda, formatarPercentual } from "@/lib/formato";
 import { INSTITUICOES } from "@/lib/instituicoes/catalogo";
-import { removerFatura } from "./acoes";
+import { alternarCartaoVinculado, novoVinculado, removerCartaoVinculado, removerFatura } from "./acoes";
 import { FormCartao, FormFatura } from "./formularios";
 
 export default function PaginaCartoes() {
@@ -207,6 +207,62 @@ function CartaoDetalhe({ c, contas, emissores }: { c: ResumoCartao; contas: { id
           </table>
         </details>
       )}
+
+      <details className="mt-3" open={c.vinculados.some((v) => v.compras90d > 0 && v.ativo === false)}>
+        <summary className="cursor-pointer text-sm underline">Cartões virtuais e adicionais ({c.vinculados.length})</summary>
+        <p className="mt-2 text-xs text-suave">
+          Virtuais e adicionais caem na mesma fatura deste cartão. Os finais encontrados nas faturas entram aqui sozinhos; ao cancelar um
+          virtual no app do banco, marque como cancelado: o consultor avisa se havia assinatura cobrada nele.
+        </p>
+        {c.vinculados.length > 0 && (
+          <ul className="mt-2 space-y-1 text-sm">
+            {c.vinculados.map((v) => (
+              <li key={v.id} className={`flex flex-wrap items-center justify-between gap-2 border-t border-borda pt-1 ${v.ativo ? "" : "text-suave"}`}>
+                <span>
+                  {v.apelido} <span className="text-xs text-suave">· {v.tipo} · final {v.final}</span>
+                  {!v.ativo && <span className="text-xs"> · cancelado{v.canceladoEm ? ` em ${formatarData(v.canceladoEm)}` : ""}</span>}
+                  {v.compras90d > 0 && (
+                    <span className="text-xs text-suave">
+                      {" "}
+                      · {v.compras90d} compra(s) em 90 dias, {formatarMoeda(v.total90dCentavos)}
+                    </span>
+                  )}
+                </span>
+                <span className="flex gap-3 text-xs">
+                  <form action={alternarCartaoVinculado}>
+                    <input type="hidden" name="id" value={v.id} />
+                    <input type="hidden" name="ativo" value={v.ativo ? "0" : "1"} />
+                    <button className="underline">{v.ativo ? "marcar como cancelado" : "reativar"}</button>
+                  </form>
+                  <form action={removerCartaoVinculado}>
+                    <input type="hidden" name="id" value={v.id} />
+                    <button className="text-suave underline hover:text-negativo">remover</button>
+                  </form>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <form action={novoVinculado} className="mt-3 flex flex-wrap items-end gap-2 text-sm">
+          <input type="hidden" name="contaId" value={k.id} />
+          <label className="grid gap-1">
+            <span className="text-xs text-suave">Tipo</span>
+            <select name="tipo" className={estiloCampo} defaultValue="virtual">
+              <option value="virtual">Virtual</option>
+              <option value="adicional">Adicional</option>
+            </select>
+          </label>
+          <label className="grid gap-1">
+            <span className="text-xs text-suave">Final (4 dígitos)</span>
+            <input name="final" inputMode="numeric" maxLength={4} required className={`${estiloCampo} w-24`} />
+          </label>
+          <label className="grid gap-1">
+            <span className="text-xs text-suave">Nome (opcional)</span>
+            <input name="apelido" placeholder="Ex.: Virtual assinaturas" className={estiloCampo} />
+          </label>
+          <button className="rounded-md border border-borda px-3 py-1.5 hover:border-foreground/30">Adicionar</button>
+        </form>
+      </details>
 
       {c.faturas.length > 0 && (
         <details className="mt-3">

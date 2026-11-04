@@ -130,3 +130,48 @@ describe("marcarMistura", () => {
     expect(t.natureza).toBe("despesa_pj_na_pf");
   });
 });
+
+describe("identidade: retiradas e aportes com um lado só", async () => {
+  const { aplicarIdentidade, variantesDeNome } = await import("../motor");
+  const id = {
+    docsSocio: new Set(["12345678909"]),
+    nomesSocio: variantesDeNome("DIOGO DA SILVA DEVITTE"),
+    docsEmpresa: new Set(["28250988000166"]),
+    nomesEmpresa: ["DIOGO DEVITTE CONSULTORIA E SERVICOS EM MARKETING LTDA", "RANKTOP"],
+  };
+  const base = { id: 1, contaId: 1, data: "2026-10-05", documentoContraparte: null, escopo: null, categoriaId: null, natureza: "comum" as const, classificadoPor: null, parTransferenciaId: null, revisar: false, motivo: null, confianca: null };
+  const pj = { id: 1, tipo: "pagamento" as const, escopoPadrao: "PJ" as const };
+  const pf = { id: 2, tipo: "corrente" as const, escopoPadrao: "PF" as const };
+
+  it("variantes do nome", () => {
+    expect(variantesDeNome("DIOGO DA SILVA DEVITTE")).toEqual(expect.arrayContaining(["DIOGO DA SILVA DEVITTE", "DIOGO DEVITTE"]));
+  });
+  it("Pix da empresa para o seu nome vira retirada a definir", () => {
+    const t = { ...base, descricaoNormalizada: "PIX ENVIADO DIOGO DEVITTE", valorCentavos: -200_000, classificadoPor: "ia" as const, categoriaId: "pj_folha" };
+    expect(aplicarIdentidade(t, pj, id)).toBe(true);
+    expect(t).toMatchObject({ natureza: "retirada_socio", categoriaId: "mov_socio", escopo: "PJ", revisar: true });
+  });
+  it("pelo CPF na contraparte, mesmo sem nome", () => {
+    const t = { ...base, descricaoNormalizada: "PIX ENVIADO", documentoContraparte: "12345678909", valorCentavos: -100_000 };
+    expect(aplicarIdentidade(t, pj, id)).toBe(true);
+  });
+  it("na conta pessoal, entrada vinda da empresa é retirada e saída para a empresa é aporte", () => {
+    const entrada = { ...base, contaId: 2, descricaoNormalizada: "PIX RECEBIDO RANKTOP", valorCentavos: 450_000 };
+    expect(aplicarIdentidade(entrada, pf, id)).toBe(true);
+    expect(entrada).toMatchObject({ natureza: "retirada_socio", escopo: "PF" });
+    const saida = { ...base, contaId: 2, descricaoNormalizada: "PIX ENVIADO DIOGO DEVITTE CONSULTORIA E SERVICOS EM MARKETING LTDA", valorCentavos: -50_000 };
+    expect(aplicarIdentidade(saida, pf, id)).toBe(true);
+    expect(saida).toMatchObject({ natureza: "aporte_socio" });
+  });
+  it("pró-labore já reconhecido continua pró-labore; correção sua não é tocada", () => {
+    const pl = { ...base, descricaoNormalizada: "PIX PRO LABORE DIOGO DEVITTE", valorCentavos: -450_000, natureza: "pro_labore" as const, classificadoPor: "heuristica" as const };
+    aplicarIdentidade(pl, pj, id);
+    expect(pl).toMatchObject({ natureza: "pro_labore", revisar: false });
+    const sua = { ...base, descricaoNormalizada: "PIX ENVIADO DIOGO DEVITTE", valorCentavos: -1_000, classificadoPor: "usuario" as const, categoriaId: "pj_outros" };
+    expect(aplicarIdentidade(sua, pj, id)).toBe(false);
+  });
+  it("não confunde com outra pessoa", () => {
+    const t = { ...base, descricaoNormalizada: "PIX ENVIADO DIOGO SOUZA", valorCentavos: -1_000 };
+    expect(aplicarIdentidade(t, pj, id)).toBe(false);
+  });
+});

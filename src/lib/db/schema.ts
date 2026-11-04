@@ -119,6 +119,8 @@ export const transacoes = pgTable(
     documentoContraparte: text("documento_contraparte"),
     parcelaAtual: integer("parcela_atual"),
     parcelaTotal: integer("parcela_total"),
+    /** Cartão: final do cartão que fez a compra (físico, virtual ou adicional), quando a fatura separa. */
+    finalCartao: text("final_cartao"),
     escopo: escopoEnum("escopo"),
     categoriaId: text("categoria_id").references(() => categorias.id),
     natureza: naturezaEnum("natureza").notNull().default("comum"),
@@ -474,3 +476,28 @@ export const mensagensConsultor = pgTable(
   },
   (t) => [index("mensagens_conversa_idx").on(t.conversaId)],
 );
+
+/**
+ * Cartões virtuais e adicionais de um cartão de crédito: compram com outro final, mas caem na mesma
+ * fatura. Servem para a fatura ir para o cartão certo e para avisar de assinaturas presas num
+ * virtual que você cancelou.
+ */
+export const cartoesVinculados = pgTable(
+  "cartoes_vinculados",
+  {
+    id: serial("id").primaryKey(),
+    contaId: integer("conta_id")
+      .notNull()
+      .references(() => contas.id, { onDelete: "cascade" }),
+    tipo: text("tipo").$type<"virtual" | "adicional">().notNull().default("virtual"),
+    apelido: text("apelido").notNull(),
+    final: text("final").notNull(),
+    ativo: boolean("ativo").notNull().default(true),
+    canceladoEm: date("cancelado_em"),
+    observacao: text("observacao"),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("cartoes_vinculados_final_idx").on(t.contaId, t.final)],
+);
+
+export type CartaoVinculado = typeof cartoesVinculados.$inferSelect;

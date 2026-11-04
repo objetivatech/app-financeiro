@@ -2,7 +2,8 @@
 
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { excluirFatura, registrarFatura } from "@/lib/cartoes/servico";
+import { alternarVinculado, excluirFatura, excluirVinculado, registrarFatura, salvarVinculado } from "@/lib/cartoes/servico";
+import { atualizarAlertas } from "@/lib/consultor/alertas";
 import { classificarPendentes, reabrirClassificacaoDaConta } from "@/lib/classificacao/executar";
 import { atualizarCompromissos } from "@/lib/compromissos/servico";
 import { obterDb } from "@/lib/db";
@@ -84,5 +85,29 @@ export async function lancarFatura(_: Estado, fd: FormData): Promise<Estado> {
 
 export async function removerFatura(fd: FormData) {
   await excluirFatura(obterDb(), Number(fd.get("id")));
+  atualizarTelas();
+}
+
+/** Cadastra (ou renomeia) um cartão virtual ou adicional de um cartão. */
+export async function novoVinculado(fd: FormData) {
+  const contaId = Number(fd.get("contaId"));
+  const final = String(fd.get("final") ?? "").replace(/\D/g, "").slice(-4);
+  if (!contaId || final.length < 4) return;
+  const tipo = fd.get("tipo") === "adicional" ? "adicional" : "virtual";
+  const apelido = String(fd.get("apelido") ?? "").trim().slice(0, 60) || `${tipo === "virtual" ? "Virtual" : "Adicional"} final ${final}`;
+  await salvarVinculado(obterDb(), { contaId, final, tipo, apelido });
+  atualizarTelas();
+}
+
+export async function alternarCartaoVinculado(fd: FormData) {
+  const db = obterDb();
+  await alternarVinculado(db, Number(fd.get("id")), fd.get("ativo") === "1");
+  // Cancelar um virtual pode deixar assinaturas sem cartão: o consultor confere.
+  await atualizarAlertas(db, { atualizarCompromissos: false }).catch(() => undefined);
+  atualizarTelas();
+}
+
+export async function removerCartaoVinculado(fd: FormData) {
+  await excluirVinculado(obterDb(), Number(fd.get("id")));
   atualizarTelas();
 }

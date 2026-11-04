@@ -7,7 +7,7 @@ import { Cartao, Carregando, Valor } from "@/components/ui";
 import { obterDb } from "@/lib/db";
 import { indicadoresFiscais } from "@/lib/fiscal/indicadores";
 import { INSS_PRO_LABORE, LIMITE_FATOR_R } from "@/lib/fiscal/simples";
-import { formatarMoeda } from "@/lib/formato";
+import { deslocarMes, formatarMes, formatarMoeda } from "@/lib/formato";
 
 export default function PaginaImpostos() {
   return (
@@ -58,6 +58,35 @@ async function Conteudo() {
           Fator R.
         </p>
       )}
+      {(ind.meiAte || ind.folhaCompletaEm) && (
+        <div className="rounded-md border border-borda bg-superficie p-3 text-sm">
+          <p>
+            <strong>Enquadramento:</strong>{" "}
+            {ind.meiAte ? (
+              <>
+                MEI até {formatarMes(ind.meiAte)}; ME no Simples Nacional desde {formatarMes(deslocarMes(ind.meiAte, 1))}.
+              </>
+            ) : (
+              "ME/EPP no Simples Nacional."
+            )}{" "}
+            <Link href="/configuracoes#enquadramento" className="underline">alterar</Link>
+          </p>
+          {ind.folhaCompletaEm && (
+            <p className="mt-1 text-suave">
+              A folha do Fator R tem pró-labore em {ind.mesesDeFolha} dos últimos 12 meses (MEI não tem pró-labore), por isso o Fator R
+              está mais baixo agora. Com o pró-labore atual nos 12 meses — a partir de {formatarMes(ind.folhaCompletaEm)} — ele seria{" "}
+              <strong className="text-foreground">{pct(ind.fatorRPleno)}</strong>. A receita do período MEI entra na RBT12 (mesmo CNPJ).
+              Confirme com a contabilidade como o PGDAS-D está tratando esses meses.
+            </p>
+          )}
+        </div>
+      )}
+      {ind.regimeAtual === "mei" && (
+        <p className="rounded-md border border-alerta/40 bg-alerta/10 p-3 text-sm">
+          Este mês a empresa está como MEI: o DAS é o valor fixo do MEI, não o percentual do Simples. Os cálculos abaixo valem só a partir
+          do mês em que ela passa a ser ME.
+        </p>
+      )}
       {ind.mesesComDados < 12 && (
         <p className="rounded-md border border-borda bg-superficie p-3 text-sm text-suave">
           Só há receita registrada em {ind.mesesComDados} dos últimos 12 meses. Enquanto o histórico não estiver completo, a
@@ -72,7 +101,7 @@ async function Conteudo() {
             {d.fatorR >= LIMITE_FATOR_R ? "acima de 28%: tributa pelo Anexo III" : "abaixo de 28%: tributa pelo Anexo V (mais caro)"}
           </div>
           <dl className="mt-3 grid grid-cols-2 gap-1 text-sm">
-            <dt className="text-suave">Folha (pró-labore × 12)</dt>
+            <dt className="text-suave">Folha 12 meses ({ind.mesesDeFolha === 12 ? "pró-labore × 12" : `pró-labore × ${ind.mesesDeFolha} meses`})</dt>
             <dd className="text-right"><Valor centavos={d.folha12Centavos} /></dd>
             <dt className="text-suave">Receita 12 meses (RBT12)</dt>
             <dd className="text-right"><Valor centavos={d.rbt12Centavos} /></dd>

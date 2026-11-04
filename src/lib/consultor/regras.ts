@@ -42,6 +42,8 @@ export interface TransacaoRetrato {
   natureza: string;
   parcelaAtual: number | null;
   parcelaTotal: number | null;
+  /** Final do cartão (físico, virtual ou adicional) que fez a compra, quando a fatura informa. */
+  finalCartao?: string | null;
 }
 
 export interface Retrato {
@@ -60,13 +62,24 @@ export interface Retrato {
   dividas: ResumoDivida[];
   cartoes: ResumoCartao[];
   recebiveis: ResumoRecebiveis;
-  fiscal: { diagnostico: DiagnosticoFatorR; mesesComDados: number; proLaboreMensalCentavos: number; sujeitoFatorR: boolean } | null;
+  fiscal: {
+    diagnostico: DiagnosticoFatorR;
+    mesesComDados: number;
+    proLaboreMensalCentavos: number;
+    sujeitoFatorR: boolean;
+    regimeAtual?: "mei" | "simples";
+    mesesDeFolha?: number;
+    fatorRPleno?: number;
+    folhaCompletaEm?: string | null;
+  } | null;
   fluxo: { semanas: SemanaFluxo[]; contasSemSaldo: number };
   aPagar: ItemAPagar[];
   lembretes: LembretePendente[];
   /** Últimos ~150 dias de transações (as regras por transação olham os últimos 45). */
   transacoes: TransacaoRetrato[];
   contasParadas: { id: number; apelido: string; ultima: string }[];
+  /** Cartões virtuais/adicionais cancelados (para avisar de assinaturas presas neles). */
+  vinculadosCancelados?: { contaId: number; contaApelido: string; apelido: string; final: string; canceladoEm: string | null }[];
   paraRevisar: number;
 }
 
@@ -259,6 +272,24 @@ export function regrasDeTransacoes(r: Retrato): AlertaDetectado[] {
           recomendacao: "Se for útil, cadastre como conta fixa em A pagar para entrar no fluxo de caixa. Se não reconhece, cancele ou conteste.",
           link: "/pagar",
           pergunta: `Vale a pena manter ${nome} (${m(-ultima.valorCentavos)} por mês)?`,
+          transacaoId: ultima.id,
+        }),
+      );
+    }
+    // Assinatura cobrada num cartão virtual que você cancelou: a próxima cobrança vai falhar.
+    const cancelado = (r.vinculadosCancelados ?? []).find((v) => v.contaId === ultima.contaId && v.final === ultima.finalCartao);
+    if (cancelado && mensais.length >= 2 && ultima.data >= somarDias(r.hoje, -75)) {
+      saida.push(
+        alerta({
+          chave: `virtual_cancelado:${cancelado.contaId}:${cancelado.final}:${k}`,
+          tipo: "cartao",
+          gravidade: "atencao",
+          escopo: ultima.escopo,
+          titulo: `Assinatura no cartão virtual cancelado (${cancelado.apelido})`,
+          mensagem: `${ultima.descricao} (${m(-ultima.valorCentavos)} por mês) é cobrada no final ${cancelado.final}, que você marcou como cancelado.`,
+          recomendacao: "Atualize o cartão nesse serviço (ou cancele a assinatura, se não usa mais) antes da próxima cobrança, para não ter o serviço suspenso.",
+          link: "/cartoes",
+          pergunta: `Quais assinaturas estavam no cartão virtual final ${cancelado.final}?`,
           transacaoId: ultima.id,
         }),
       );
@@ -545,20 +576,34 @@ export function regrasDoFluxo(r: Retrato): AlertaDetectado[] {
     }
   }
 
-  // Fator R
-  if (r.fiscal && r.fiscal.sujeitoFatorR && r.fiscal.mesesComDados >= 6 && r.fiscal.proLaboreMensalCentavos > 0 && r.fiscal.diagnostico.fatorR < R.fatorR) {
+  // Fator R (só para quem já está no Simples como ME; MEI paga DAS fixo)
+  if (
+    r.fiscal &&
+    r.fiscal.sujeitoFatorR &&
+    r.fiscal.regimeAtual !== "mei" &&
+    r.fiscal.mesesComDados >= 6 &&
+    r.fiscal.proLaboreMensalCentavos > 0 &&
+    r.fiscal.diagnostico.fatorR < R.fatorR
+  ) {
     const d = r.fiscal.diagnostico;
+    const transicao = r.fiscal.folhaCompletaEm && (r.fiscal.fatorRPleno ?? 0) >= R.fatorR;
     saida.push(
       alerta({
         chave: `fator_r:${mesAtual}`,
         tipo: "imposto",
-        gravidade: "atencao",
+        gravidade: transicao ? "info" : "atencao",
         escopo: "PJ",
-        titulo: `Fator R em ${formatarPercentual(d.fatorR)}: empresa no Anexo V`,
-        mensagem: `Com pró-labore de ${m(d.proLaboreMinimoCentavos)} por mês a empresa voltaria ao Anexo III. DAS estimado do mês: ${m(d.dasEstimadoCentavos)} (no Anexo III seria ${m(d.dasNoOutroAnexoCentavos)}).`,
-        recomendacao: "Compare a economia no DAS com o custo do aumento do pró-labore (11% de INSS + IR na PF) e leve a conta para a contabilidade.",
+        titulo: transicao
+          ? `Fator R em ${formatarPercentual(d.fatorR)} por causa da saída do MEI`
+          : `Fator R em ${formatarPercentual(d.fatorR)}: empresa no Anexo V`,
+        mensagem: transicao
+          ? `A folha tem pró-labore em só ${r.fiscal.mesesDeFolha} dos últimos 12 meses. Com o pró-labore atual nos 12 meses (a partir de ${formatarMes(r.fiscal.folhaCompletaEm!)}), o Fator R seria ${formatarPercentual(r.fiscal.fatorRPleno!)}. DAS estimado do mês: ${m(d.dasEstimadoCentavos)}.`
+          : `Com pró-labore de ${m(d.proLaboreMinimoCentavos)} por mês a empresa voltaria ao Anexo III. DAS estimado do mês: ${m(d.dasEstimadoCentavos)} (no Anexo III seria ${m(d.dasNoOutroAnexoCentavos)}).`,
+        recomendacao: transicao
+          ? "Confirme com a contabilidade como o PGDAS-D está considerando os meses de MEI na folha. Manter o pró-labore todo mês garante o Anexo III quando completar 12 meses."
+          : "Compare a economia no DAS com o custo do aumento do pró-labore (11% de INSS + IR na PF) e leve a conta para a contabilidade.",
         link: "/impostos",
-        pergunta: "Vale a pena aumentar o pró-labore para voltar ao Anexo III?",
+        pergunta: transicao ? "Como a saída do MEI afeta meu Fator R e o DAS nos próximos meses?" : "Vale a pena aumentar o pró-labore para voltar ao Anexo III?",
       }),
     );
   }

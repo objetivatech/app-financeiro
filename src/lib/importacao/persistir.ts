@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { eq } from "drizzle-orm";
 import type { Db } from "../db";
-import { contas, importacoes, titulares, transacoes } from "../db/schema";
+import { cartoesVinculados, contas, importacoes, titulares, transacoes } from "../db/schema";
 import { registrarFatura } from "../cartoes/servico";
 import { obterInstituicao } from "../instituicoes/catalogo";
 import { lerArquivo, type OpcoesImportacao } from "./importar";
@@ -57,6 +57,17 @@ async function resolverTitular(db: Db, extrato: ExtratoNormalizado): Promise<num
 async function resolverConta(db: Db, extrato: ExtratoNormalizado, titularId: number | undefined) {
   const { instituicaoId, conta } = extrato;
   const tipo = conta.tipo ?? "corrente";
+
+  // Fatura de um cartão virtual/adicional já cadastrado: vai para o cartão principal.
+  if (conta.finalCartao) {
+    const vinculados = await db
+      .select({ conta: contas })
+      .from(cartoesVinculados)
+      .innerJoin(contas, eq(contas.id, cartoesVinculados.contaId))
+      .where(eq(cartoesVinculados.final, conta.finalCartao));
+    const doMesmoEmissor = vinculados.filter((v) => !instituicaoId || !v.conta.instituicaoId || v.conta.instituicaoId === instituicaoId);
+    if (doMesmoEmissor.length === 1) return doMesmoEmissor[0].conta;
+  }
 
   if (instituicaoId) {
     const daInstituicao = await db.query.contas.findMany({ where: eq(contas.instituicaoId, instituicaoId) });
@@ -136,6 +147,13 @@ export async function importarParaBanco(
 
   const gravado = await gravarExtrato(db, extrato, { contaId: conta.id, nomeArquivo, hashArquivo: hash });
   const { novas, duplicadas } = gravado;
+  if (conta.tipo === "cartao_credito") {
+    // Cartão sem final cadastrado: assume o final principal da fatura.
+    if (!conta.finalCartao && extrato.conta.finalCartao) {
+      await db.update(contas).set({ finalCartao: extrato.conta.finalCartao }).where(eq(contas.id, conta.id));
+    }
+    await registrarFinaisDaFatura(db, conta.id, conta.finalCartao ?? extrato.conta.finalCartao ?? null, extrato);
+  }
   if (extrato.fatura && conta.tipo === "cartao_credito") {
     await registrarFatura(db, {
       contaId: conta.id,
@@ -210,6 +228,7 @@ export async function gravarExtrato(
       hashDedup: hashes[i],
       nomeContraparte: t.nomeContraparte ?? null,
       documentoContraparte: t.documentoContraparte ?? null,
+      finalCartao: t.finalCartao ?? null,
       parcelaAtual: t.parcela?.atual ?? null,
       parcelaTotal: t.parcela?.total ?? null,
       // Classificação já conhecida pela origem (ex.: tipo de lançamento do Asaas).
@@ -243,4 +262,18 @@ export async function gravarExtrato(
 
     return { importacaoId: importacao.id, novas, duplicadas, inseridas };
   });
+}
+
+/**
+ * Finais que aparecem na fatura e não são o do cartão físico: registra como cartão virtual
+ * (você ajusta o nome e o tipo em Cartões). Assim dá para ver o que cada virtual compra.
+ */
+export async function registrarFinaisDaFatura(db: Db, contaId: number, finalFisico: string | null, extrato: ExtratoNormalizado): Promise<void> {
+  const finais = new Set(extrato.transacoes.map((t) => t.finalCartao).filter((f): f is string => Boolean(f) && f !== finalFisico));
+  for (const final of finais) {
+    await db
+      .insert(cartoesVinculados)
+      .values({ contaId, final, tipo: "virtual", apelido: `Cartão final ${final}`, observacao: "Encontrado na fatura" })
+      .onConflictDoNothing();
+  }
 }

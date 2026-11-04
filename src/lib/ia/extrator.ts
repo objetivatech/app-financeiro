@@ -34,6 +34,7 @@ const EsquemaExtrato = z.object({
       nome_contraparte: z.string().nullable(),
       documento_contraparte: z.string().nullable().describe("CPF/CNPJ da contraparte, só dígitos, se aparecer"),
       parcela_atual: z.number().int().nullable(),
+      final_cartao: z.string().nullable().describe("Fatura: últimos 4 dígitos do cartão desta compra (físico, virtual ou adicional), quando a fatura separa por cartão"),
       parcela_total: z.number().int().nullable(),
     }),
   ),
@@ -48,6 +49,7 @@ Regras:
 - Sinal: entrada de dinheiro = positivo; saída = negativo. Em fatura de cartão, compras e tarifas são negativas; pagamentos da fatura, estornos e créditos são positivos.
 - Datas em AAAA-MM-DD. Se o documento só mostra dia/mês, deduza o ano pelo período do extrato ou da fatura.
 - Compras parceladas ("03/10", "Parc 3 de 10"): preencha parcela_atual e parcela_total.
+- Faturas costumam separar os lançamentos por cartão (físico, virtuais, adicionais): preencha final_cartao de cada compra com os 4 dígitos do cartão daquela seção.
 - Em fatura de cartão, preencha vencimento, fechamento, total a pagar e pagamento mínimo da fatura atual. Não transcreva como transação o resumo de "próximas faturas"/"compras parceladas a vencer": só os lançamentos desta fatura.
 - Em Pix/TED, quando o extrato mostra o nome ou CPF/CNPJ de quem enviou ou recebeu, preencha a contraparte.
 - Se algo estiver ilegível ou cortado, diga em "observacoes" em vez de adivinhar.
@@ -157,6 +159,7 @@ export async function extrairComIa(entrada: EntradaExtracao): Promise<ExtratoNor
         nomeContraparte: t.nome_contraparte ?? undefined,
         documentoContraparte: t.documento_contraparte?.replace(/\D/g, "") || undefined,
         parcela: t.parcela_atual && t.parcela_total ? { atual: t.parcela_atual, total: t.parcela_total } : undefined,
+        finalCartao: t.final_cartao?.replace(/\D/g, "").slice(-4) || undefined,
       },
     ];
   });

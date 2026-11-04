@@ -27,6 +27,8 @@ export interface TransacaoClassificavel {
   descricaoNormalizada: string;
   valorCentavos: number;
   documentoContraparte: string | null;
+  /** Nome da contraparte já normalizado (quando o extrato separa). */
+  nomeContraparteNormalizado?: string | null;
   escopo: Escopo | null;
   categoriaId: string | null;
   natureza: Natureza;
@@ -233,4 +235,73 @@ export function marcarMistura(t: TransacaoClassificavel, conta: ContaContexto): 
     t.natureza = "despesa_pj_na_pf";
     t.revisar = true;
   }
+}
+
+/**
+ * Quem é você e quem é a empresa: nomes (como aparecem nos Pix) e documentos. Serve para
+ * reconhecer retiradas e aportes mesmo quando só um lado da transferência foi importado
+ * (ex.: o Pix sai da conta da empresa para uma conta pessoal que ainda não está no app).
+ */
+export interface Identidade {
+  docsSocio: Set<string>;
+  nomesSocio: string[];
+  docsEmpresa: Set<string>;
+  nomesEmpresa: string[];
+}
+
+/** Variações de um nome normalizado para procurar na descrição: o nome todo e "primeiro + último". */
+export function variantesDeNome(nomeNormalizado: string): string[] {
+  const palavras = nomeNormalizado.split(/\s+/).filter((p) => p.length >= 2 && !/^(DA|DE|DO|DAS|DOS|E|LTDA|ME|EPP|EIRELI|SA)$/.test(p));
+  if (palavras.length < 2) return palavras.length === 1 && palavras[0].length >= 6 ? [palavras[0]] : [];
+  const todo = nomeNormalizado.trim();
+  const curto = `${palavras[0]} ${palavras[palavras.length - 1]}`;
+  return [...new Set([todo, curto])];
+}
+
+function citaAlguem(t: TransacaoClassificavel, docs: Set<string>, nomes: string[]): boolean {
+  if (t.documentoContraparte && docs.has(t.documentoContraparte)) return true;
+  const textos = [t.descricaoNormalizada, t.nomeContraparteNormalizado ?? ""];
+  return nomes.some((n) => n && textos.some((x) => new RegExp(`(^|\\W)${n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(\\W|$)`).test(x)));
+}
+
+/**
+ * Pix/TED entre você e a empresa com só um lado no app. Não mexe no que você, uma regra ou o
+ * pareamento de transferências já decidiu. Retirada fica "para revisar" (pró-labore ou lucro?).
+ */
+export function aplicarIdentidade(t: TransacaoClassificavel, conta: ContaContexto, id: Identidade): boolean {
+  if (t.parTransferenciaId !== null || conta.escopoPadrao === "misto") return false;
+  if (!["comum", "pro_labore", "distribuicao_lucros", "despesa_pessoal_na_pj", "despesa_pj_na_pf"].includes(t.natureza)) return false;
+  const empresa = citaAlguem(t, id.docsEmpresa, id.nomesEmpresa);
+  const socio = !empresa && citaAlguem(t, id.docsSocio, id.nomesSocio);
+  if (!empresa && !socio) return false;
+  const jaSabe = t.natureza === "pro_labore" || t.natureza === "distribuicao_lucros";
+
+  if (conta.escopoPadrao === "PJ" && t.valorCentavos < 0 && socio) {
+    return aplicar(t, "transferencia", {
+      natureza: jaSabe ? t.natureza : "retirada_socio",
+      categoriaId: "mov_socio",
+      escopo: "PJ",
+      revisar: !jaSabe,
+      motivo: "Pix da empresa para você (sócio)",
+    });
+  }
+  if (conta.escopoPadrao === "PJ" && t.valorCentavos > 0 && socio) {
+    return aplicar(t, "transferencia", { natureza: "aporte_socio", categoriaId: "mov_socio", escopo: "PJ", revisar: false, motivo: "Dinheiro seu entrando na empresa" });
+  }
+  if (conta.escopoPadrao === "PF" && t.valorCentavos > 0 && empresa) {
+    return aplicar(t, "transferencia", {
+      natureza: jaSabe ? t.natureza : "retirada_socio",
+      categoriaId: "mov_socio",
+      escopo: "PF",
+      revisar: !jaSabe,
+      motivo: "Dinheiro da empresa entrando na sua conta",
+    });
+  }
+  if (conta.escopoPadrao === "PF" && t.valorCentavos < 0 && empresa) {
+    return aplicar(t, "transferencia", { natureza: "aporte_socio", categoriaId: "mov_socio", escopo: "PF", revisar: false, motivo: "Dinheiro seu colocado na empresa" });
+  }
+  if (conta.escopoPadrao === "PJ" && empresa && t.valorCentavos !== 0) {
+    return aplicar(t, "transferencia", { natureza: "transferencia_interna", categoriaId: "mov_transferencia", escopo: "PJ", revisar: false, motivo: "Entre contas da própria empresa" });
+  }
+  return false;
 }

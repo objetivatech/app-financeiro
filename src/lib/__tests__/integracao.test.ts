@@ -11,7 +11,7 @@ import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { CATEGORIAS_PADRAO } from "../classificacao/categorias";
-import { classificarPendentes, reabrirClassificacaoDaConta } from "../classificacao/executar";
+import { classificarPendentes, reabrirClassificacaoDaConta, reaplicarIdentidade } from "../classificacao/executar";
 import type { Db } from "../db";
 import * as schema from "../db/schema";
 import { parcelasFixas } from "../compromissos/calculo";
@@ -19,9 +19,10 @@ import { atualizarCompromissos, contasAPagar, criarDivida, criarRecorrencia, flu
 import { hojeBrasil, somarDias } from "../datas";
 import { indicadoresFiscais, resumoRecebiveis } from "../fiscal/indicadores";
 import { salvarPerfilFiscal } from "../fiscal/perfil";
+import { deslocarMes as deslocarMesTeste } from "../formato";
 import { sincronizarAsaas } from "../integracoes/asaas/sincronizar";
 import { cancelarFila, enfileirar, estadoFila, retomarFila, situacaoDosTrabalhos } from "../importacao/fila";
-import { gravarExtrato, importarParaBanco } from "../importacao/persistir";
+import { gravarExtrato, importarParaBanco, registrarFinaisDaFatura } from "../importacao/persistir";
 import { somarMeses } from "../cartoes/calculo";
 import { registrarFatura, resumoCartoes } from "../cartoes/servico";
 import { visaoConsolidada } from "../visoes/calculo";
@@ -43,7 +44,7 @@ describe.skipIf(!url)("importação + classificação no banco", () => {
     pool = new Pool({ connectionString: url });
     db = drizzle(pool, { schema });
     await migrate(db, { migrationsFolder: "drizzle" });
-    await db.execute(sql`truncate mensagens_consultor, conversas, alertas, faturas, empresas, notas_fiscais, compromissos, dividas, recorrencias, uso_ia, clientes, integracoes, trabalhos_importacao, transacoes, importacoes, regras, contas, titulares, categorias, configuracoes restart identity cascade`);
+    await db.execute(sql`truncate cartoes_vinculados, mensagens_consultor, conversas, alertas, faturas, empresas, notas_fiscais, compromissos, dividas, recorrencias, uso_ia, clientes, integracoes, trabalhos_importacao, transacoes, importacoes, regras, contas, titulares, categorias, configuracoes restart identity cascade`);
     await db.insert(schema.categorias).values(CATEGORIAS_PADRAO);
   });
 
@@ -538,5 +539,38 @@ describe.skipIf(!url)("importação + classificação no banco", () => {
       redefinirClienteIa();
       servidor.close();
     }
+  });
+
+  it("v0.8: retiradas pelo seu nome, enquadramento MEI → ME e cartões virtuais", async () => {
+    // 1) Pix da empresa para você, sem a conta pessoal no app, classificado pela IA como despesa.
+    const pj = (await db.query.contas.findFirst({ where: (c, { eq }) => eq(c.escopoPadrao, "PJ") }))!;
+    const [pix] = await db
+      .insert(schema.transacoes)
+      .values({ contaId: pj.id, data: hojeBrasil(), descricao: "PIX ENVIADO FULANO DE TAL SOCIO", descricaoNormalizada: "PIX ENVIADO FULANO DE TAL SOCIO", valorCentavos: -300_000, hashDedup: "v08-pix", escopo: "PJ", categoriaId: "pj_folha", classificadoPor: "ia" })
+      .returning();
+    await salvarPerfilFiscal(db, { proLaboreMensalCentavos: 450_000, nomeSocio: "Fulano de Tal Socio", regimes: [{ regime: "mei", inicio: "2000-01" }, { regime: "simples", inicio: deslocarMesTeste(hojeBrasil().slice(0, 7), -2) }] });
+    expect(await reaplicarIdentidade(db)).toBeGreaterThanOrEqual(1);
+    expect(await db.query.transacoes.findFirst({ where: (t, { eq }) => eq(t.id, pix.id) })).toMatchObject({ natureza: "retirada_socio", categoriaId: "mov_socio", revisar: true });
+    const somas = await somasPorMes(db, hojeBrasil().slice(0, 7), hojeBrasil().slice(0, 7));
+    expect(visaoConsolidada(somas[0]).ficouNaEmpresa + visaoConsolidada(somas[0]).sobrouParaVoce).toBe(visaoConsolidada(somas[0]).resultado);
+
+    // 2) Fator R com a folha só desde a saída do MEI.
+    const f = await indicadoresFiscais(db);
+    expect(f.regimeAtual).toBe("simples");
+    expect(f.mesesDeFolha).toBe(2);
+    expect(f.diagnostico.folha12Centavos).toBe(900_000);
+    expect(f.folhaCompletaEm).toBe(deslocarMesTeste(hojeBrasil().slice(0, 7), 10));
+
+    // 3) Finais diferentes na fatura viram cartões virtuais do mesmo cartão.
+    const cartao = (await db.query.contas.findFirst({ where: (c, { eq }) => eq(c.tipo, "cartao_credito") }))!;
+    await registrarFinaisDaFatura(db, cartao.id, "1111", {
+      formato: "pdf", conta: {}, moeda: "BRL", avisos: [], extraidoPor: "ia",
+      transacoes: [
+        { data: hojeBrasil(), descricao: "A", valorCentavos: -100, finalCartao: "1111" },
+        { data: hojeBrasil(), descricao: "B", valorCentavos: -100, finalCartao: "9876" },
+      ],
+    });
+    const [c] = (await resumoCartoes(db)).filter((x) => x.conta.id === cartao.id);
+    expect(c.vinculados.map((v) => v.final)).toEqual(["9876"]);
   });
 });

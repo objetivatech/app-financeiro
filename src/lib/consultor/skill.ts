@@ -48,6 +48,9 @@ export const SKILL_GESTAO_FINANCEIRA = `# Skill: gestão financeira de sócio de
 - **Fator R:** com pró-labore ≥ 28% da receita dos últimos 12 meses, marketing/desenvolvimento ficam no **Anexo III**
   (a partir de 6%) em vez do **Anexo V** (a partir de 15,5%). Subir o pró-labore custa **11% de INSS** sobre o aumento
   (e IR na PF, conforme a tabela); compare com a economia de DAS antes de decidir — e valide com a contabilidade.
+- **Saída do MEI:** a receita do período MEI entra na RBT12 (mesmo CNPJ), mas o MEI não tem pró-labore: logo depois de
+  virar ME, a folha dos 12 meses fica curta e o Fator R baixo até completar 12 meses de pró-labore. Confirme com a
+  contabilidade como o PGDAS-D está tratando o período; o app mostra o Fator R efetivo e o que ele será com 12 meses.
 - **Separe o imposto no dia em que recebe:** reserve a alíquota efetiva estimada de cada recebimento; o DAS vence dia 20.
 - **Lucros:** distribuição de lucros apurados é isenta de IR para o sócio (regra atual; acompanhe mudanças na legislação
   com a contabilidade). Retirada sem definição (Pix "para mim") precisa ser classificada como pró-labore ou lucro.
