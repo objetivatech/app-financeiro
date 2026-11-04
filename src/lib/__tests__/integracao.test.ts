@@ -21,7 +21,12 @@ import { indicadoresFiscais, resumoRecebiveis } from "../fiscal/indicadores";
 import { salvarPerfilFiscal } from "../fiscal/perfil";
 import { sincronizarAsaas } from "../integracoes/asaas/sincronizar";
 import { cancelarFila, enfileirar, estadoFila, retomarFila, situacaoDosTrabalhos } from "../importacao/fila";
-import { importarParaBanco } from "../importacao/persistir";
+import { gravarExtrato, importarParaBanco } from "../importacao/persistir";
+import { somarMeses } from "../cartoes/calculo";
+import { registrarFatura, resumoCartoes } from "../cartoes/servico";
+import { visaoConsolidada } from "../visoes/calculo";
+import { somasPorMes } from "../visoes/consultas";
+import { dadosConsolidado, dadosPainelPF, dadosPainelPJ } from "../visoes/paineis";
 
 const url = process.env.TEST_DATABASE_URL;
 const fixture = (nome: string) => new Uint8Array(readFileSync(`tests/fixtures/${nome}`));
@@ -34,7 +39,7 @@ describe.skipIf(!url)("importação + classificação no banco", () => {
     pool = new Pool({ connectionString: url });
     db = drizzle(pool, { schema });
     await migrate(db, { migrationsFolder: "drizzle" });
-    await db.execute(sql`truncate notas_fiscais, compromissos, dividas, recorrencias, uso_ia, clientes, integracoes, trabalhos_importacao, transacoes, importacoes, regras, contas, titulares, categorias, configuracoes restart identity cascade`);
+    await db.execute(sql`truncate faturas, empresas, notas_fiscais, compromissos, dividas, recorrencias, uso_ia, clientes, integracoes, trabalhos_importacao, transacoes, importacoes, regras, contas, titulares, categorias, configuracoes restart identity cascade`);
     await db.insert(schema.categorias).values(CATEGORIAS_PADRAO);
   });
 
@@ -292,5 +297,109 @@ describe.skipIf(!url)("importação + classificação no banco", () => {
     const saidasPF = fluxo.semanas.reduce((s, w) => s + w.PF.saidas, 0);
     expect(saidasPF).toBeGreaterThan(0);
     expect(fluxo.semanas.at(-1)!.PF.saldo).toBe(fluxo.saldoInicial.PF + fluxo.semanas.reduce((s, w) => s + w.PF.entradas - w.PF.saidas, 0));
+  });
+
+  it("cartão: parcelas de faturas diferentes não viram duplicata, projeção e baixa da fatura", async () => {
+    const hoje = hojeBrasil();
+    const nubank = (await db.query.contas.findFirst({ where: (c, { eq }) => eq(c.escopoPadrao, "PF") }))!;
+    const [cartao] = await db
+      .insert(schema.contas)
+      .values({ instituicaoNome: "Cartão Teste", apelido: "Cartão Teste", tipo: "cartao_credito", escopoPadrao: "PF", diaFechamento: 3, diaVencimento: 10, limiteCentavos: 500_000, contaPagamentoId: nubank.id })
+      .returning();
+    const venc1 = somarDias(hoje, 6);
+    const venc2 = somarMeses(venc1, 1);
+    const fatura = (venc: string, parcela: number) => ({
+      formato: "pdf" as const,
+      conta: { tipo: "cartao_credito" as const },
+      moeda: "BRL",
+      avisos: [],
+      extraidoPor: "ia" as const,
+      // A fatura repete a data da compra original em todo mês.
+      transacoes: [
+        { data: "2026-08-15", descricao: `LOJA X ${parcela}/10`, valorCentavos: -10_000, parcela: { atual: parcela, total: 10 } },
+        { data: somarDias(venc, -12), descricao: "IFOOD *RESTAURANTE", valorCentavos: -4_590 },
+      ],
+      fatura: { vencimento: venc, totalCentavos: 14_590 },
+    });
+    for (const [venc, parcela] of [[venc1, 3], [venc2, 4]] as const) {
+      const g = await gravarExtrato(db, fatura(venc, parcela), { contaId: cartao.id, nomeArquivo: `fatura-${parcela}`, hashArquivo: `fatura-${parcela}` });
+      expect(g.novas).toBe(2);
+      await registrarFatura(db, { contaId: cartao.id, vencimento: venc, valorCentavos: 14_590, importacaoId: g.importacaoId, origem: "importacao" });
+    }
+    const [r] = (await resumoCartoes(db)).filter((c) => c.conta.id === cartao.id);
+    expect(r.faturaAberta).toMatchObject({ vencimento: venc1, valorCentavos: 14_590 });
+    expect(r.parcelas).toHaveLength(6); // parcelas 5 a 10
+    expect(r.parcelas[0]).toMatchObject({ numero: 5, vencimento: somarMeses(venc2, 1), valorCentavos: 10_000 });
+    expect(r.parceladoAVencerCentavos).toBe(60_000);
+
+    // O fluxo inclui as faturas conhecidas e as parcelas dos meses seguintes.
+    const fluxo = await fluxoProjetado(db, 13);
+    expect(fluxo.semanas.reduce((s, w) => s + w.PF.saidas, 0)).toBeGreaterThanOrEqual(14_590 * 2 + 10_000);
+
+    // O pagamento da fatura aparece no extrato: baixa a fatura e vira "pagamento de fatura" (não é gasto).
+    await db.insert(schema.transacoes).values({
+      contaId: nubank.id,
+      data: venc1,
+      descricao: "PAGAMENTO CARTAO TESTE",
+      descricaoNormalizada: "PAGAMENTO CARTAO TESTE",
+      valorCentavos: -14_590,
+      hashDedup: "teste-fatura",
+    });
+    await atualizarCompromissos(db);
+    const [depois] = (await resumoCartoes(db)).filter((c) => c.conta.id === cartao.id);
+    expect(depois.faturaAberta?.vencimento).toBe(venc2);
+    const pagamento = await db.query.transacoes.findFirst({ where: (t, { eq }) => eq(t.hashDedup, "teste-fatura") });
+    expect(pagamento).toMatchObject({ natureza: "pagamento_fatura", categoriaId: "mov_fatura" });
+  });
+
+  it("classificadores complementares: estabelecimento conhecido e CNPJ → CNAE, sem IA", async () => {
+    const servidor = createServer((req, res) => {
+      if (req.url?.endsWith("/45997418000153")) {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ razao_social: "SABOR LTDA", cnae_fiscal: 5611201, cnae_fiscal_descricao: "Restaurantes e similares" }));
+      } else {
+        res.writeHead(404).end();
+      }
+    });
+    await new Promise<void>((ok) => servidor.listen(0, ok));
+    const porta = (servidor.address() as { port: number }).port;
+    process.env.CNPJ_API_URL = `http://127.0.0.1:${porta}/api/cnpj/v1`;
+    process.env.CONSULTA_CNPJ = "1";
+    try {
+      const pf = (await db.query.contas.findFirst({ where: (c, { eq }) => eq(c.escopoPadrao, "PF") }))!;
+      const base = { contaId: pf.id, data: hojeBrasil() };
+      await db.insert(schema.transacoes).values([
+        { ...base, descricao: "UBER *TRIP", descricaoNormalizada: "UBER *TRIP", valorCentavos: -2_300, hashDedup: "enr-1" },
+        { ...base, descricao: "PIX ENVIADO SABOR", descricaoNormalizada: "PIX ENVIADO SABOR", valorCentavos: -5_000, hashDedup: "enr-2", documentoContraparte: "45997418000153" },
+      ]);
+      const resumo = await classificarPendentes(db, { usarIa: false });
+      expect(resumo.porEnriquecimento).toBeGreaterThanOrEqual(2);
+      const uber = await db.query.transacoes.findFirst({ where: (t, { eq }) => eq(t.hashDedup, "enr-1") });
+      expect(uber).toMatchObject({ categoriaId: "pf_transporte", classificadoPor: "heuristica" });
+      const sabor = await db.query.transacoes.findFirst({ where: (t, { eq }) => eq(t.hashDedup, "enr-2") });
+      expect(sabor).toMatchObject({ categoriaId: "pf_alimentacao" });
+      const cache = await db.query.empresas.findFirst({ where: (e, { eq }) => eq(e.cnpj, "45997418000153") });
+      expect(cache).toMatchObject({ situacao: "ok", cnae: "5611201" });
+    } finally {
+      delete process.env.CNPJ_API_URL;
+      delete process.env.CONSULTA_CNPJ;
+      servidor.close();
+    }
+  });
+
+  it("painéis: o que ficou na empresa + o que sobrou para você = resultado consolidado, em todo mês", async () => {
+    const mes = hojeBrasil().slice(0, 7);
+    const somas = await somasPorMes(db, "2026-01", mes);
+    expect(somas.length).toBeGreaterThan(1);
+    for (const s of somas) {
+      const c = visaoConsolidada(s);
+      expect(c.ficouNaEmpresa + c.sobrouParaVoce).toBe(c.resultado);
+    }
+    const pj = await dadosPainelPJ(db, mes);
+    const pf = await dadosPainelPF(db, mes);
+    const consolidado = await dadosConsolidado(db, mes);
+    expect(pj.serie).toHaveLength(6);
+    expect(pf.categorias.some((c) => c.categoriaId === "pf_alimentacao")).toBe(true);
+    expect(consolidado.posicaoLiquida).toBe(consolidado.caixa + consolidado.aReceber - consolidado.dividasRestantes - consolidado.cartoesAVencer);
   });
 });

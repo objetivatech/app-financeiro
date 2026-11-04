@@ -1,6 +1,8 @@
-import { and, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, isNull, lte, or } from "drizzle-orm";
 import type { Db } from "../db";
-import { configuracoes, transacoes, type Transacao } from "../db/schema";
+import { clientes, configuracoes, transacoes, type Transacao } from "../db/schema";
+import { dadosDasEmpresas, type DadosEmpresa } from "./cnpj";
+import { classificarPorCnae, classificarPorEstabelecimento, classificarPorHistorico, indiceDoHistorico } from "./enriquecimento";
 import { iaDisponivel } from "../ia/cliente";
 import { classificarComIa } from "./ia";
 import {
@@ -56,6 +58,8 @@ function mudou(a: TransacaoClassificavel, b: TransacaoClassificavel): boolean {
 export interface ResumoClassificacao {
   processadas: number;
   porIa: number;
+  /** Classificadas pelo histórico, pelo dicionário de estabelecimentos ou pelo CNPJ (sem IA). */
+  porEnriquecimento: number;
   transferencias: number;
   paraRevisar: number;
   erroIa?: string;
@@ -63,7 +67,8 @@ export interface ResumoClassificacao {
 
 /**
  * Classifica as transações ainda sem categoria: regras do usuário, heurísticas,
- * pareamento de transferências entre contas próprias e, por último, IA.
+ * pareamento de transferências entre contas próprias, classificadores complementares
+ * (histórico, estabelecimentos conhecidos, CNPJ) e, por último, IA.
  */
 export async function classificarPendentes(
   db: Db,
@@ -72,7 +77,7 @@ export async function classificarPendentes(
   const pendentesDb = await db.query.transacoes.findMany({
     where: or(isNull(transacoes.classificadoPor), isNull(transacoes.categoriaId)),
   });
-  const resumo: ResumoClassificacao = { processadas: 0, porIa: 0, transferencias: 0, paraRevisar: 0 };
+  const resumo: ResumoClassificacao = { processadas: 0, porIa: 0, porEnriquecimento: 0, transferencias: 0, paraRevisar: 0 };
   if (pendentesDb.length === 0) return resumo;
 
   const [listaContas, listaRegras, listaTitulares, perfil] = await Promise.all([
@@ -119,6 +124,53 @@ export async function classificarPendentes(
     aplicarRegras(t, regrasCtx);
   }
   resumo.transferencias = parearTransferencias([...porId.values()], mapaContas, documentos);
+
+  // Classificadores complementares (antes da IA, de graça): histórico, estabelecimentos e CNPJ.
+  const aindaSem = pendentes.filter((t) => !t.categoriaId && t.natureza === "comum");
+  if (aindaSem.length > 0) {
+    const [exemplos, listaClientes] = await Promise.all([
+      db
+        .select({
+          descricaoNormalizada: transacoes.descricaoNormalizada,
+          valorCentavos: transacoes.valorCentavos,
+          escopo: transacoes.escopo,
+          categoriaId: transacoes.categoriaId,
+        })
+        .from(transacoes)
+        .where(
+          and(
+            eq(transacoes.classificadoPor, "usuario"),
+            isNotNull(transacoes.categoriaId),
+            eq(transacoes.natureza, "comum"),
+            gte(transacoes.data, new Date(Date.now() - 548 * 86_400_000).toISOString().slice(0, 10)),
+          ),
+        ),
+      db.select({ documento: clientes.documento }).from(clientes).where(isNotNull(clientes.documento)),
+    ]);
+    const indice = indiceDoHistorico(exemplos.map((e) => ({ ...e, valorCentavos: Number(e.valorCentavos), categoriaId: e.categoriaId! })));
+    const documentosClientes = new Set(listaClientes.map((c) => c.documento));
+    const cnpjs = aindaSem
+      .map((t) => t.documentoContraparte)
+      .filter((d): d is string => Boolean(d && d.length === 14 && !documentos.has(d) && !documentosClientes.has(d)));
+    let empresasPorCnpj = new Map<string, DadosEmpresa>();
+    try {
+      empresasPorCnpj = await dadosDasEmpresas(db, cnpjs, opcoes.signal);
+    } catch (erro) {
+      if (opcoes.signal?.aborted) throw erro;
+    }
+    for (const t of aindaSem) {
+      const doc = t.documentoContraparte;
+      const empresa = doc ? empresasPorCnpj.get(doc) : undefined;
+      const decisao =
+        classificarPorHistorico(t.descricaoNormalizada, t.valorCentavos, indice) ??
+        (doc && documentosClientes.has(doc) && t.valorCentavos > 0
+          ? { escopo: "PJ" as const, categoriaId: "pj_receita", motivo: "Pagamento de um cliente da empresa (CPF/CNPJ do cadastro de clientes)" }
+          : null) ??
+        classificarPorEstabelecimento(t.descricaoNormalizada, t.valorCentavos, t.escopo) ??
+        (empresa ? classificarPorCnae(empresa.cnae, empresa.cnaeDescricao, t.valorCentavos, t.escopo) : null);
+      if (decisao && aplicar(t, "heuristica", { ...decisao, revisar: false, confianca: 0.9 })) resumo.porEnriquecimento++;
+    }
+  }
 
   const semCategoria = pendentes.filter((t) => !t.categoriaId);
   if (semCategoria.length > 0 && opcoes.usarIa !== false && iaDisponivel()) {

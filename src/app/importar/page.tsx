@@ -9,7 +9,9 @@ import { formatarData } from "@/lib/formato";
 import { trabalhosRecentes } from "@/lib/importacao/fila";
 import { Importador } from "./importador";
 
-export default function PaginaImportar() {
+type Busca = Promise<Record<string, string | string[] | undefined>>;
+
+export default function PaginaImportar({ searchParams }: { searchParams: Busca }) {
   return (
     <div className="space-y-6">
       <div>
@@ -22,15 +24,16 @@ export default function PaginaImportar() {
         </p>
       </div>
       <Suspense fallback={<Carregando />}>
-        <Conteudo />
+        <Conteudo searchParams={searchParams} />
       </Suspense>
     </div>
   );
 }
 
-async function Conteudo() {
+async function Conteudo({ searchParams }: { searchParams: Busca }) {
   await connection();
   const db = obterDb();
+  const pedida = (await searchParams).conta;
   const [contas, historico, idsAbertos] = await Promise.all([
     listarContas(db),
     db.query.importacoes.findMany({ orderBy: (i, { desc }) => [desc(i.id)], limit: 15 }),
@@ -45,7 +48,11 @@ async function Conteudo() {
           imagens precisam da IA, e a classificação fica só com regras e heurísticas.
         </p>
       )}
-      <Importador contas={contas.map((c) => ({ id: c.id, apelido: c.apelido }))} idsIniciais={idsAbertos} />
+      <Importador
+        contas={contas.map((c) => ({ id: c.id, apelido: c.apelido }))}
+        idsIniciais={idsAbertos}
+        contaInicial={typeof pedida === "string" && contas.some((c) => String(c.id) === pedida) ? pedida : ""}
+      />
       {historico.length > 0 && (
         <Cartao titulo="Últimas importações">
           <table className="w-full text-sm">

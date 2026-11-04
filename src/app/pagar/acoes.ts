@@ -2,7 +2,8 @@
 
 import { and, eq, gte, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { lerParcelasDigitadas, parcelasFixas } from "@/lib/compromissos/calculo";
+import { somarMeses as somarMesesData } from "@/lib/cartoes/calculo";
+import { lerParcelasDigitadas, parcelasCorrigidasPelaSelic, parcelasFixas, vencimentosUltimoDiaUtil } from "@/lib/compromissos/calculo";
 import {
   criarContaAvulsa,
   criarDivida,
@@ -55,7 +56,20 @@ export async function novaDivida(_: Estado, fd: FormData): Promise<Estado> {
     const primeiro = dataDe(fd, "primeiroVencimento");
     if (!valor || valor <= 0 || !quantidade || !primeiro) return { erro: "Preencha valor da parcela, quantidade e 1º vencimento." };
     if (quantidade > 600) return { erro: "Quantidade de parcelas muito alta." };
-    parcelas = parcelasFixas(primeiro, quantidade, valor);
+    const selic = texto(fd, "modo") === "selic";
+    // Parcelamentos da Receita vencem no último dia útil; a 1ª pode ter outra data (a do pedido).
+    const vencimentos =
+      selic || fd.get("ultimoDiaUtil") === "on"
+        ? [primeiro, ...vencimentosUltimoDiaUtil(somarMesesData(primeiro, 1), quantidade - 1)]
+        : null;
+    if (selic) {
+      const taxa = Number(texto(fd, "selicMensal").replace(",", "."));
+      if (!Number.isFinite(taxa) || taxa < 0 || taxa > 5) return { erro: "Selic ao mês inválida (ex.: 1,10)." };
+      parcelas = parcelasCorrigidasPelaSelic({ parcelaBasicaCentavos: valor, quantidade, vencimentos: vencimentos!, selicMensal: taxa / 100 });
+    } else {
+      parcelas = parcelasFixas(primeiro, quantidade, valor);
+      if (vencimentos) parcelas = parcelas.map((p, i) => ({ ...p, vencimento: vencimentos[i] }));
+    }
   }
   if (parcelas.length === 0) return { erro: "Informe ao menos uma parcela." };
 
@@ -70,7 +84,10 @@ export async function novaDivida(_: Estado, fd: FormData): Promise<Estado> {
     diasTolerancia: inteiro(fd, "diasTolerancia"),
     consequenciaAtraso: texto(fd, "consequencia") || null,
     lembreteAposPagar: texto(fd, "lembrete") || null,
-    observacao: texto(fd, "observacao") || null,
+    observacao:
+      [texto(fd, "observacao"), texto(fd, "modo") === "selic" ? `Valores estimados com Selic de ${texto(fd, "selicMensal")}% ao mês + 1% no mês do pagamento.` : ""]
+        .filter(Boolean)
+        .join(" ") || null,
     parcelas,
     parcelasJaPagas: Math.min(Math.max(jaPagas, 0), parcelas.length),
   });

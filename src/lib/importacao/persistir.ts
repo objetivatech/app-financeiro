@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { eq } from "drizzle-orm";
 import type { Db } from "../db";
 import { contas, importacoes, titulares, transacoes } from "../db/schema";
+import { registrarFatura } from "../cartoes/servico";
 import { obterInstituicao } from "../instituicoes/catalogo";
 import { lerArquivo, type OpcoesImportacao } from "./importar";
 import { ErroImportacao, type Escopo, type ExtratoNormalizado } from "./tipos";
@@ -16,11 +17,16 @@ export function hashArquivo(bytes: Uint8Array): string {
  * daquele par (data, valor) no arquivo. Assim, o mesmo mês importado via OFX e depois via PDF
  * não duplica, mesmo com descrições escritas de jeitos diferentes, e duas compras iguais no
  * mesmo dia continuam sendo duas.
+ *
+ * Parcelas de cartão entram com o número da parcela: a fatura costuma repetir a data da compra
+ * original em todo mês ("15/03 LOJA 03/10", depois "15/03 LOJA 04/10"), e sem isso a parcela
+ * do mês seguinte seria descartada como duplicada.
  */
 export function calcularHashesDedup(extrato: ExtratoNormalizado): string[] {
   const contagem = new Map<string, number>();
   return extrato.transacoes.map((t) => {
-    const base = `${t.data}|${t.valorCentavos}`;
+    const parcela = t.parcela ? `|p${t.parcela.atual}/${t.parcela.total}` : "";
+    const base = `${t.data}|${t.valorCentavos}${parcela}`;
     const ocorrencia = contagem.get(base) ?? 0;
     contagem.set(base, ocorrencia + 1);
     return `${base}|${ocorrencia}`;
@@ -130,6 +136,17 @@ export async function importarParaBanco(
 
   const gravado = await gravarExtrato(db, extrato, { contaId: conta.id, nomeArquivo, hashArquivo: hash });
   const { novas, duplicadas } = gravado;
+  if (extrato.fatura && conta.tipo === "cartao_credito") {
+    await registrarFatura(db, {
+      contaId: conta.id,
+      vencimento: extrato.fatura.vencimento,
+      fechamento: extrato.fatura.fechamento ?? null,
+      valorCentavos: extrato.fatura.totalCentavos,
+      minimoCentavos: extrato.fatura.minimoCentavos ?? null,
+      importacaoId: gravado.importacaoId,
+      origem: "importacao",
+    });
+  }
   return {
     importacaoId: gravado.importacaoId,
     contaId: conta.id,

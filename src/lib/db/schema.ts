@@ -60,6 +60,14 @@ export const contas = pgTable(
     /** Marcação do usuário para limpar a vida financeira. */
     candidataEncerrar: boolean("candidata_encerrar").notNull().default(false),
     observacao: text("observacao"),
+    /** Cartão de crédito: dia em que a fatura fecha (compras a partir dele vão para a fatura seguinte). */
+    diaFechamento: integer("dia_fechamento"),
+    /** Cartão de crédito: dia de vencimento da fatura. */
+    diaVencimento: integer("dia_vencimento"),
+    /** Cartão de crédito: limite total. */
+    limiteCentavos: bigint("limite_centavos", { mode: "number" }),
+    /** Cartão de crédito: conta de onde sai o pagamento da fatura (para o fluxo de caixa e a conciliação). */
+    contaPagamentoId: integer("conta_pagamento_id"),
     criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("contas_instituicao_idx").on(t.instituicaoId)],
@@ -362,3 +370,45 @@ export const usoIa = pgTable(
   },
   (t) => [index("uso_ia_criado_idx").on(t.criadoEm)],
 );
+
+/**
+ * Faturas de cartão de crédito: vêm da importação da fatura (vencimento e total lidos do documento)
+ * ou do lançamento manual. Cada fatura gera uma conta a pagar (`compromissoId`), que é quitada
+ * quando o pagamento aparece no extrato da conta que paga o cartão.
+ */
+export const faturas = pgTable(
+  "faturas",
+  {
+    id: serial("id").primaryKey(),
+    contaId: integer("conta_id")
+      .notNull()
+      .references(() => contas.id, { onDelete: "cascade" }),
+    vencimento: date("vencimento").notNull(),
+    fechamento: date("fechamento"),
+    /** Total a pagar (positivo). */
+    valorCentavos: bigint("valor_centavos", { mode: "number" }).notNull(),
+    minimoCentavos: bigint("minimo_centavos", { mode: "number" }),
+    importacaoId: integer("importacao_id").references(() => importacoes.id, { onDelete: "set null" }),
+    compromissoId: integer("compromisso_id").references(() => compromissos.id, { onDelete: "set null" }),
+    origem: text("origem").notNull().default("importacao"),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("faturas_conta_vencimento_idx").on(t.contaId, t.vencimento)],
+);
+
+export type Fatura = typeof faturas.$inferSelect;
+
+/**
+ * Cadastro público de empresas (CNPJ → atividade/CNAE), consultado na BrasilAPI e guardado aqui
+ * para não repetir a consulta. Ajuda a classificar pagamentos a empresas. Só CNPJ: CPF nunca é consultado.
+ */
+export const empresas = pgTable("empresas", {
+  cnpj: text("cnpj").primaryKey(),
+  razaoSocial: text("razao_social"),
+  nomeFantasia: text("nome_fantasia"),
+  cnae: text("cnae"),
+  cnaeDescricao: text("cnae_descricao"),
+  /** "ok", "nao_encontrado" ou "erro" (erro é tentado de novo depois). */
+  situacao: text("situacao").notNull().default("ok"),
+  consultadoEm: timestamp("consultado_em", { withTimezone: true }).notNull().defaultNow(),
+});

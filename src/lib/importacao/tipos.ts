@@ -59,6 +59,8 @@ export interface ExtratoNormalizado {
   saldoFinalCentavos?: number;
   moeda: string;
   transacoes: TransacaoExtraida[];
+  /** Fatura de cartão: vencimento e total a pagar, quando o documento informa. */
+  fatura?: { vencimento: string; fechamento?: string; totalCentavos: number; minimoCentavos?: number };
   /** Avisos não fatais (linhas ignoradas, campos ausentes etc.). */
   avisos: string[];
   /** Quem fez a extração: parser determinístico ou IA. */

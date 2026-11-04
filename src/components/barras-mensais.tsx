@@ -11,7 +11,7 @@ export function BarrasMensais({
 }: {
   titulo: string;
   dados: { mes: string; valor: number }[];
-  cor: "pf" | "pj" | "alerta";
+  cor: "pf" | "pj" | "alerta" | "neutro";
 }) {
   const altura = 96;
   const maxAbs = Math.max(1, ...dados.map((d) => Math.abs(d.valor)));
@@ -20,7 +20,7 @@ export function BarrasMensais({
   // Linha de base: no meio se houver positivos e negativos; embaixo se só positivos; em cima se só negativos.
   const base = temNegativo && temPositivo ? altura / 2 : temNegativo ? 0 : altura;
   const escala = (temNegativo && temPositivo ? altura / 2 : altura) / maxAbs;
-  const corBarra = { pf: "bg-pf", pj: "bg-pj", alerta: "bg-alerta" }[cor];
+  const corBarra = { pf: "bg-pf", pj: "bg-pj", alerta: "bg-alerta", neutro: "bg-foreground/55" }[cor];
 
   return (
     <figure>

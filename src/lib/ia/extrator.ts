@@ -22,6 +22,10 @@ const EsquemaExtrato = z.object({
   periodo_fim: z.string().nullable().describe("AAAA-MM-DD"),
   saldo_final: z.number().nullable().describe("Saldo final em reais (ou total da fatura, negativo), se aparecer"),
   moeda: z.string().describe("Código ISO da moeda, ex.: BRL"),
+  fatura_vencimento: z.string().nullable().describe("Só em fatura de cartão: data de vencimento, AAAA-MM-DD"),
+  fatura_fechamento: z.string().nullable().describe("Só em fatura de cartão: data de fechamento/corte, AAAA-MM-DD"),
+  fatura_total: z.number().nullable().describe("Só em fatura de cartão: total a pagar em reais, positivo"),
+  fatura_minimo: z.number().nullable().describe("Só em fatura de cartão: pagamento mínimo em reais, positivo"),
   transacoes: z.array(
     z.object({
       data: z.string().describe("AAAA-MM-DD"),
@@ -44,6 +48,7 @@ Regras:
 - Sinal: entrada de dinheiro = positivo; saída = negativo. Em fatura de cartão, compras e tarifas são negativas; pagamentos da fatura, estornos e créditos são positivos.
 - Datas em AAAA-MM-DD. Se o documento só mostra dia/mês, deduza o ano pelo período do extrato ou da fatura.
 - Compras parceladas ("03/10", "Parc 3 de 10"): preencha parcela_atual e parcela_total.
+- Em fatura de cartão, preencha vencimento, fechamento, total a pagar e pagamento mínimo da fatura atual. Não transcreva como transação o resumo de "próximas faturas"/"compras parceladas a vencer": só os lançamentos desta fatura.
 - Em Pix/TED, quando o extrato mostra o nome ou CPF/CNPJ de quem enviou ou recebeu, preencha a contraparte.
 - Se algo estiver ilegível ou cortado, diga em "observacoes" em vez de adivinhar.
 
@@ -162,8 +167,21 @@ export async function extrairComIa(entrada: EntradaExtracao): Promise<ExtratoNor
   const inicio = dados.periodo_inicio ? parseData(dados.periodo_inicio) : null;
   const fim = dados.periodo_fim ? parseData(dados.periodo_fim) : null;
 
+  const vencimentoFatura = dados.fatura_vencimento ? parseData(dados.fatura_vencimento) : null;
+  const fechamentoFatura = dados.fatura_fechamento ? parseData(dados.fatura_fechamento) : null;
+  const fatura =
+    vencimentoFatura && dados.fatura_total !== null && Number.isFinite(dados.fatura_total)
+      ? {
+          vencimento: vencimentoFatura,
+          fechamento: fechamentoFatura ?? undefined,
+          totalCentavos: Math.round(Math.abs(dados.fatura_total) * 100),
+          minimoCentavos: dados.fatura_minimo !== null ? Math.round(Math.abs(dados.fatura_minimo) * 100) : undefined,
+        }
+      : undefined;
+
   return {
     formato: entrada.formato,
+    fatura,
     instituicaoId: instituicaoId ?? undefined,
     instituicaoNomeLido: dados.instituicao_nome ?? undefined,
     conta: {

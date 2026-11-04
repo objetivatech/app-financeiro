@@ -65,3 +65,17 @@ describe("conciliação de contas a pagar", () => {
     expect(casarPagamentos(comp, [t(1, "2026-11-09", -20_000, "CEEE", 2)])).toHaveLength(0);
   });
 });
+
+describe("conciliação de parcelamento de imposto", () => {
+  it("aceita até 5% de diferença quando a descrição é de guia de imposto", async () => {
+    const { casarPagamentos, PADRAO_GUIA_IMPOSTO } = await import("../calculo");
+    const pares = casarPagamentos(
+      [{ id: 1, valorCentavos: 10069, vencimento: "2026-11-30", contaId: null, padraoExtrato: null, padraoRegex: PADRAO_GUIA_IMPOSTO }],
+      [
+        { id: 7, data: "2026-11-27", valorCentavos: -10071, contaId: 3, descricaoNormalizada: "PIX MERCADO" },
+        { id: 8, data: "2026-11-28", valorCentavos: -10075, contaId: 3, descricaoNormalizada: "PAGAMENTO DAS SIMPLES NACIONAL" },
+      ],
+    );
+    expect(pares).toEqual([{ compromissoId: 1, transacaoId: 8 }]);
+  });
+});

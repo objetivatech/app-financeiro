@@ -2,7 +2,11 @@ import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { and, gte, lte, sql } from "drizzle-orm";
 import { z } from "zod";
 import { obterPerfil } from "../classificacao/executar";
-import { despesasPorCategoria, resumoDoPeriodo, serieMensal, type Periodo } from "../consultas";
+import { resumoDividas } from "../compromissos/servico";
+import { despesasPorCategoria, resumoDoPeriodo, type Periodo } from "../consultas";
+import { deslocarMes } from "../formato";
+import { visaoConsolidada, visaoPF, visaoPJ } from "../visoes/calculo";
+import { somasPorMes } from "../visoes/consultas";
 import type { Db } from "../db";
 import { analises, transacoes } from "../db/schema";
 import { ErroIa, modeloDa, obterClienteIa, opcoesDeFallback, registrarUso } from "./cliente";
@@ -35,7 +39,9 @@ Seu trabalho: olhar os números consolidados e dizer o que importa — sem jarg�
 
 Foque em:
 - Separação PF/PJ: gastos pessoais pagos pela empresa, gastos da empresa pagos pela PF, retiradas sem padrão. Mostre o tamanho do problema em reais.
-- Quanto a empresa realmente sobra (receitas − despesas da PJ) versus quanto o sócio retira. Retirar mais do que a empresa gera é sinal vermelho.
+- Quanto a empresa realmente gera (resultado antes de pagar o sócio) versus quanto vai para o sócio. Tirar mais do que a empresa gera é sinal vermelho.
+- Do lado pessoal: renda (inclui pró-labore, lucros e retiradas), custo de vida, sobra/taxa de poupança e peso das parcelas de dívidas.
+- Dívidas: priorize as que não podem atrasar e as de juros mais altos.
 - Custo de vida pessoal e para onde ele vai; assinaturas e gastos recorrentes que podem ser cortados.
 - Organização: excesso de contas e cartões, tarifas, juros.
 - Pontos tributários do Simples (pró-labore × distribuição de lucros, Fator R, DAS): trate como hipóteses para validar com o contador. Não afirme alíquotas ou regras de que você não tenha certeza; nesses casos, transforme em pergunta para o contador.
@@ -79,25 +85,43 @@ const reais = (centavos: number) => Math.round(centavos) / 100;
 
 /** Gera dicas e alertas para o período a partir de dados agregados (não envia o extrato inteiro). */
 export async function gerarAnalise(db: Db, p: Periodo): Promise<{ id: number; analise: Analise }> {
-  const [resumo, categorias, serie, recorr, maiores, perfil, contas] = await Promise.all([
+  const mes = p.fim.slice(0, 7);
+  const [resumo, categorias, somas, recorr, maiores, perfil, contas, dividas] = await Promise.all([
     resumoDoPeriodo(db, p),
     despesasPorCategoria(db, p),
-    serieMensal(db, 6, p.fim.slice(0, 7)),
+    somasPorMes(db, deslocarMes(mes, -5), mes),
     recorrentes(db, p.fim),
     maioresDespesas(db, p),
     obterPerfil(db),
     db.query.contas.findMany({ columns: { apelido: true, tipo: true, escopoPadrao: true, candidataEncerrar: true } }),
+    resumoDividas(db),
   ]);
+  const emReais = (o: object) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, typeof v === "number" && !/margem|peso|distribuido|taxa|comprometimento/i.test(k) ? reais(v) : v]));
   if (resumo.total === 0) throw new ErroIa("Não há transações neste período para analisar.");
 
   const dados = {
     periodo: p,
     perfil_do_usuario: perfil || null,
-    resumo_em_reais: Object.fromEntries(
-      Object.entries(resumo).map(([k, v]) => [k, ["semEscopo", "paraRevisar", "total"].includes(k) ? v : reais(v)]),
-    ),
+    pendencias: { sem_pf_pj: resumo.semEscopo, para_revisar: resumo.paraRevisar, transacoes_no_mes: resumo.total },
+    // Visões já calculadas pelo app (regras em visoes/calculo.ts): use estes números, não recalcule.
+    empresa_pj_em_reais: emReais(visaoPJ(somas.at(-1)!)),
+    pessoal_pf_em_reais: emReais(visaoPF(somas.at(-1)!)),
+    consolidado_em_reais: emReais(visaoConsolidada(somas.at(-1)!)),
     despesas_por_categoria: categorias.map((c) => ({ categoria: c.nome, escopo: c.escopo, total: reais(c.totalCentavos), qtd: c.quantidade })),
-    ultimos_meses: serie.map((s) => ({ mes: s.mes, resultado_pj: reais(s.pjResultado), despesas_pf: reais(s.pfDespesas), saiu_da_empresa_para_o_socio: reais(s.retiradas) })),
+    ultimos_meses: somas.map((s) => {
+      const pj = visaoPJ(s);
+      const pf = visaoPF(s);
+      return {
+        mes: s.mes,
+        receita_pj: reais(pj.receitaTotal),
+        resultado_pj_antes_do_socio: reais(pj.resultadoOperacional),
+        foi_para_o_socio: reais(pj.paraOSocio),
+        renda_pf: reais(pf.rendaTotal),
+        custo_de_vida_pf: reais(pf.custoDeVida),
+        sobra_pf: reais(pf.sobra),
+      };
+    }),
+    dividas: dividas.map((d) => ({ nome: d.nome, escopo: d.escopo, restante: reais(d.restanteCentavos), parcela: reais(d.parcelaMensalCentavos), parcelas: `${d.parcelasPagas}/${d.parcelasTotal}`, juros_ao_mes: d.taxaMensal, dias_atraso: d.diasAtraso })),
     gastos_recorrentes: recorr.map((r) => ({ descricao: r.descricao.trim(), meses: r.meses, media: reais(Number(r.mediaCentavos)), escopo: r.escopo })),
     maiores_saidas: maiores.map((m) => ({ data: m.data, descricao: m.descricao, valor: reais(m.valorCentavos), escopo: m.escopo, natureza: m.natureza })),
     contas: contas.map((c) => ({ apelido: c.apelido, tipo: c.tipo, escopo: c.escopoPadrao, candidata_a_encerrar: c.candidataEncerrar })),

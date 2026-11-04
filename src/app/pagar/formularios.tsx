@@ -46,7 +46,7 @@ function SeletorEscopo() {
 
 export function FormularioDivida({ contas }: { contas: Conta[] }) {
   const [estado, acao, pendente] = useActionState(novaDivida, null);
-  const [modo, setModo] = useState<"fixas" | "diferentes">("fixas");
+  const [modo, setModo] = useState<"fixas" | "diferentes" | "selic">("fixas");
   return (
     <form action={acao} className="grid gap-3 md:grid-cols-2">
       <Campo rotulo="Nome">
@@ -81,8 +81,35 @@ export function FormularioDivida({ contas }: { contas: Conta[] }) {
         <label className="flex items-center gap-1.5">
           <input type="radio" name="modo" value="diferentes" checked={modo === "diferentes"} onChange={() => setModo("diferentes")} /> Valores diferentes
         </label>
+        <label className="flex items-center gap-1.5">
+          <input type="radio" name="modo" value="selic" checked={modo === "selic"} onChange={() => setModo("selic")} /> Parcelamento da Receita (Selic)
+        </label>
       </div>
-      {modo === "fixas" ? (
+      {modo === "selic" ? (
+        <div className="md:col-span-2 grid gap-3">
+          <p className="text-xs text-suave">
+            Parcelamento de DAS do Simples/MEI na Receita: a 1ª parcela é a básica; as seguintes somam a Selic acumulada + 1% e vencem
+            no último dia útil do mês. O app estima os valores; a baixa usa o valor real que aparecer no extrato.
+          </p>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+            <Campo rotulo="Parcela básica">
+              <input name="valorParcela" placeholder="97,61" className={estiloCampo} />
+            </Campo>
+            <Campo rotulo="Nº de parcelas">
+              <input name="quantidade" type="number" min={1} placeholder="10" className={estiloCampo} />
+            </Campo>
+            <Campo rotulo="Vencimento da 1ª">
+              <input name="primeiroVencimento" type="date" className={estiloCampo} />
+            </Campo>
+            <Campo rotulo="Já pagas" dica="Das primeiras">
+              <input name="jaPagas" type="number" min={0} defaultValue={0} className={estiloCampo} />
+            </Campo>
+            <Campo rotulo="Selic ao mês (%)" dica="Estimativa; confira no DAS">
+              <input name="selicMensal" defaultValue="1,10" className={estiloCampo} />
+            </Campo>
+          </div>
+        </div>
+      ) : modo === "fixas" ? (
         <div className="md:col-span-2 grid grid-cols-2 gap-3 md:grid-cols-4">
           <Campo rotulo="Valor da parcela">
             <input name="valorParcela" placeholder="637,50" className={estiloCampo} />
@@ -96,6 +123,9 @@ export function FormularioDivida({ contas }: { contas: Conta[] }) {
           <Campo rotulo="Já pagas" dica="Das primeiras">
             <input name="jaPagas" type="number" min={0} defaultValue={0} className={estiloCampo} />
           </Campo>
+          <label className="col-span-2 flex items-center gap-1.5 text-sm md:col-span-4">
+            <input type="checkbox" name="ultimoDiaUtil" /> Da 2ª em diante, vence no último dia útil do mês
+          </label>
         </div>
       ) : (
         <div className="md:col-span-2 grid gap-3 md:grid-cols-[1fr_auto]">
