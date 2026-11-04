@@ -462,8 +462,8 @@ Para contas que não têm integração: arraste extratos e faturas (OFX, CSV, PD
 - **Faturas de cartão:** além das compras, o app lê vencimento, total e mínimo e lança a fatura em A pagar. Parcelas
   ("3/10") de faturas de meses diferentes não são confundidas com duplicatas, mesmo repetindo a data da compra.
 
-> **Asaas:** depois de conectar a integração, **não importe mais extratos do Asaas por arquivo** — o extrato chega
-> sozinho.
+> **Asaas e Mercado Pago:** depois de conectar a integração, **não importe mais extratos deles por arquivo** — o extrato
+> chega sozinho. O **Relatório de Liberações** do Mercado Pago (CSV) é reconhecido no Importar, para quem não conectou.
 
 <a id="contas"></a>
 
@@ -513,6 +513,37 @@ Traz automaticamente, só lendo (o app nunca cria cobranças nem movimenta dinhe
 - O extrato vem **até ontem** (dias completos). Lançamentos de hoje aparecem na próxima sincronização do dia seguinte;
   as cobranças, por outro lado, são atualizadas na hora.
 - A chave do Asaas dá acesso amplo à conta: guarde-a só no `.env` da VPS. Se vazar, revogue no Asaas e gere outra.
+
+### Mercado Pago
+
+Traz automaticamente, só lendo (o app nunca cria cobranças nem move dinheiro):
+
+- **De quem é a conta:** pelo CPF ou CNPJ cadastrado no Mercado Pago, a conta "Mercado Pago" vira PF ou PJ.
+- **Pagamentos recebidos** (Pix, boleto, cartão) → [A receber](#receber), com valor líquido e data de liberação.
+- **Extrato da conta** → pelo **Relatório de Liberações** do Mercado Pago: recebimentos, tarifas, devoluções, saques para o
+  banco. Tarifas e recebimentos já chegam classificados; saques são pareados com a entrada no banco.
+- **Empréstimos do Mercado Crédito** não têm API: cadastre em **A pagar → Nova dívida** (as parcelas pagas pelo saldo
+  aparecem no extrato e dão baixa sozinhas).
+
+**Como conectar**
+
+1. Entre em **mercadopago.com.br/developers** com a conta que quer acompanhar → **Suas integrações** → **Criar
+   aplicação** (qualquer nome).
+2. Em **Credenciais de produção**, copie o **Access Token** (começa com `APP_USR-`).
+3. Na VPS, no `.env`: `MERCADOPAGO_ACCESS_TOKEN=APP_USR-...`, depois `docker compose up -d` e **Integrações →
+   Sincronizar agora**.
+
+**Como funciona**
+
+- A primeira sincronização busca 13 meses; depois, roda **a cada 6 horas** (1 minuto e meio após o servidor subir).
+  `MERCADOPAGO_SINCRONIZACAO_AUTOMATICA=0` desliga a automática.
+- O extrato vem **até ontem**. O Mercado Pago gera o relatório em segundo plano: se não ficar pronto em cerca de 1 minuto,
+  ele entra na **próxima** sincronização (a tela mostra "gerando…").
+- Se o extrato pela API falhar, a tela avisa e o resto (pagamentos) continua funcionando. **Alternativa manual:** no
+  painel do Mercado Pago, baixe o **Relatório de Liberações** em CSV e envie em [Importar](#importar) — o app reconhece
+  o arquivo.
+- Nada duplica com extratos do Mercado Pago que você já tenha importado por arquivo.
+- O Access Token dá acesso à conta: guarde-o só no `.env` da VPS. Se vazar, renove nas credenciais da aplicação.
 
 <a id="configuracoes"></a>
 

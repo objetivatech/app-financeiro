@@ -3,10 +3,10 @@
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect } from "react";
 import { Botao } from "@/components/ui";
-import { sincronizarAsaasAgora } from "./acoes";
+import { sincronizarAsaasAgora, sincronizarMercadoPagoAgora } from "./acoes";
 
-export function BotaoSincronizar({ sincronizando, desativado }: { sincronizando: boolean; desativado: boolean }) {
-  const [estado, acao, pendente] = useActionState(sincronizarAsaasAgora, null);
+export function BotaoSincronizar({ sincronizando, desativado, servico = "asaas" }: { sincronizando: boolean; desativado: boolean; servico?: "asaas" | "mercadopago" }) {
+  const [estado, acao, pendente] = useActionState(servico === "mercadopago" ? sincronizarMercadoPagoAgora : sincronizarAsaasAgora, null);
   const router = useRouter();
   // Enquanto sincroniza, recarrega a página a cada 3 s para mostrar o andamento.
   useEffect(() => {

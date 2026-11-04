@@ -21,6 +21,7 @@ import { indicadoresFiscais, resumoRecebiveis } from "../fiscal/indicadores";
 import { salvarPerfilFiscal } from "../fiscal/perfil";
 import { deslocarMes as deslocarMesTeste } from "../formato";
 import { sincronizarAsaas } from "../integracoes/asaas/sincronizar";
+import { sincronizarMercadoPago } from "../integracoes/mercadopago/sincronizar";
 import { cancelarFila, enfileirar, estadoFila, retomarFila, situacaoDosTrabalhos } from "../importacao/fila";
 import { gravarExtrato, importarParaBanco, registrarFinaisDaFatura } from "../importacao/persistir";
 import { somarMeses } from "../cartoes/calculo";
@@ -572,5 +573,75 @@ describe.skipIf(!url)("importação + classificação no banco", () => {
     });
     const [c] = (await resumoCartoes(db)).filter((x) => x.conta.id === cartao.id);
     expect(c.vinculados.map((v) => v.final)).toEqual(["9876"]);
+  });
+
+  it("Mercado Pago: conta pelo CNPJ, pagamentos recebidos e extrato pelo relatório (API falsa)", async () => {
+    const csv = [
+      "DATE;SOURCE_ID;EXTERNAL_REFERENCE;RECORD_TYPE;DESCRIPTION;NET_CREDIT_AMOUNT;NET_DEBIT_AMOUNT;PAYMENT_METHOD;BALANCE_AMOUNT",
+      `${somarDias(hojeBrasil(), -5)}T10:00:00.000-03:00;9001;;release;payment;485.50;0.00;pix;485.50`,
+      `${somarDias(hojeBrasil(), -4)}T10:00:00.000-03:00;9002;;release;fee;0.00;3.20;;482.30`,
+    ].join("\n");
+    const pedidos: string[] = [];
+    let relatorioPedido: { begin_date: string; end_date: string } | null = null;
+    const servidor = createServer((req, res) => {
+      let corpo = "";
+      req.on("data", (c) => (corpo += c));
+      req.on("end", () => {
+        pedidos.push(`${req.method} ${req.url}`);
+        expect(req.headers.authorization).toBe("Bearer APP_USR-teste");
+        const json = (status: number, dados: unknown) => {
+          res.writeHead(status, { "content-type": "application/json" });
+          res.end(JSON.stringify(dados));
+        };
+        const url = req.url ?? "";
+        if (url.startsWith("/users/me")) return json(200, { id: 42, first_name: "Empresa", identification: { type: "CNPJ", number: "28250988000166" }, company: { corporate_name: "EMPRESA TESTE LTDA" } });
+        if (url.startsWith("/v1/payments/search")) {
+          return json(200, {
+            paging: { total: 2, limit: 50, offset: 0 },
+            results: [
+              { id: 501, status: "approved", collector_id: 42, transaction_amount: 500, transaction_details: { net_received_amount: 485.5 }, date_created: `${somarDias(hojeBrasil(), -5)}T09:00:00.000-03:00`, date_approved: `${somarDias(hojeBrasil(), -5)}T09:00:00.000-03:00`, description: "Projeto SEO" },
+              { id: 502, status: "approved", collector_id: 999, transaction_amount: 50, date_created: `${somarDias(hojeBrasil(), -3)}T09:00:00.000-03:00` },
+            ],
+          });
+        }
+        if (req.method === "POST" && url === "/v1/account/release_report") {
+          relatorioPedido = JSON.parse(corpo);
+          return json(202, {});
+        }
+        if (url.startsWith("/v1/account/release_report/list")) {
+          return json(200, relatorioPedido ? [{ id: 1, file_name: "financeiro-app-1.csv", begin_date: relatorioPedido.begin_date, end_date: relatorioPedido.end_date, date_created: new Date().toISOString() }] : []);
+        }
+        if (url === "/v1/account/release_report/financeiro-app-1.csv") {
+          res.writeHead(200, { "content-type": "text/csv" });
+          return res.end(csv);
+        }
+        json(404, { message: "not found" });
+      });
+    });
+    await new Promise<void>((ok) => servidor.listen(0, ok));
+    process.env.MERCADOPAGO_ACCESS_TOKEN = "APP_USR-teste";
+    process.env.MERCADOPAGO_BASE_URL = `http://127.0.0.1:${(servidor.address() as { port: number }).port}`;
+    try {
+      const r = await sincronizarMercadoPago(db, { esperaRelatorioMs: 0 });
+      expect(r).toMatchObject({ escopo: "PJ", pagamentos: 1, lancamentosNovos: 2, relatorioPendente: null });
+      const conta = (await db.query.contas.findFirst({ where: (c, { eq }) => eq(c.instituicaoId, "mercadopago") }))!;
+      expect(conta).toMatchObject({ escopoPadrao: "PJ", tipo: "pagamento" });
+      const recebido = await db.query.compromissos.findFirst({ where: (c, { and, eq }) => and(eq(c.origem, "mercadopago"), eq(c.idExterno, "501")) });
+      expect(recebido).toMatchObject({ tipo: "receber", status: "pago", valorCentavos: 50_000, escopo: "PJ" });
+      const tarifa = await db.query.transacoes.findFirst({ where: (t, { and, eq }) => and(eq(t.contaId, conta.id), eq(t.valorCentavos, -320)) });
+      expect(tarifa).toMatchObject({ categoriaId: "pj_taxas_pagamento" });
+      const integ = await db.query.integracoes.findFirst({ where: (i, { eq }) => eq(i.id, "mercadopago") });
+      expect(integ).toMatchObject({ status: "ok", extratoAte: somarDias(hojeBrasil(), -1) });
+      expect(pedidos.filter((p) => p.startsWith("POST"))).toEqual(["POST /v1/account/release_report"]);
+
+      // Segunda vez: nada novo para pedir (extrato já está em dia), pagamentos atualizados sem duplicar.
+      const r2 = await sincronizarMercadoPago(db, { esperaRelatorioMs: 0 });
+      expect(r2.lancamentosNovos).toBe(0);
+      expect(await db.$count(schema.compromissos, sql`origem = 'mercadopago'`)).toBe(1);
+    } finally {
+      delete process.env.MERCADOPAGO_ACCESS_TOKEN;
+      delete process.env.MERCADOPAGO_BASE_URL;
+      servidor.close();
+    }
   });
 });
