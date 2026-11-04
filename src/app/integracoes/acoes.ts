@@ -15,3 +15,14 @@ export async function sincronizarAsaasAgora(): Promise<{ erro?: string } | null>
   revalidatePath("/integracoes");
   return null;
 }
+
+export async function sincronizarMercadoPagoAgora(): Promise<{ erro?: string } | null> {
+  const { mercadoPagoConfigurado } = await import("@/lib/integracoes/mercadopago/cliente");
+  const { mercadoPagoSincronizando, sincronizarMercadoPago } = await import("@/lib/integracoes/mercadopago/sincronizar");
+  if (!mercadoPagoConfigurado()) return { erro: "Configure MERCADOPAGO_ACCESS_TOKEN no .env do servidor." };
+  if (mercadoPagoSincronizando()) return { erro: "Já está sincronizando." };
+  void sincronizarMercadoPago(obterDb()).catch((erro) => console.error("Sincronização do Mercado Pago falhou", erro));
+  await new Promise((r) => setTimeout(r, 300));
+  revalidatePath("/integracoes");
+  return null;
+}

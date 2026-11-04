@@ -3,6 +3,15 @@
 Todas as mudanças relevantes do app, da mais recente para a mais antiga. O formato segue
 [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e as versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.9.0] — 2026-11-04
+
+### Adicionado
+- **Integração com o Mercado Pago** (somente leitura): identifica se a conta é PF ou PJ pelo CPF/CNPJ, traz os
+  **pagamentos recebidos** para A receber e o **extrato da conta** pelo Relatório de Liberações (recebimentos, tarifas,
+  devoluções e saques, com tarifas e recebimentos já classificados). Sincroniza a cada 6 horas e pelo botão em
+  Integrações (`MERCADOPAGO_ACCESS_TOKEN` no `.env`).
+- **Importar** reconhece o CSV do Relatório de Liberações baixado do painel do Mercado Pago.
+
 ## [0.8.0] — 2026-11-04
 
 ### Adicionado

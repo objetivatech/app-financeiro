@@ -30,7 +30,7 @@
 - [x] **Painéis separados** (v0.6.0): Consolidado (com fluxo do dinheiro), Pessoal (PF) e Empresa (PJ); menu agrupado
 - [x] **Classificadores complementares** (v0.6.0): histórico, estabelecimentos conhecidos, CNPJ → CNAE (BrasilAPI)
 - [ ] **Lançamento rápido** no navegador
-- [ ] Integração com o **Mercado Pago**
+- [x] Integração com o **Mercado Pago** (v0.9.0): pagamentos recebidos e extrato pelo Relatório de Liberações
 
 ## Fase 3 — consultora
 - [x] Painel de indicadores (v0.6.0): taxa de poupança, reserva em meses, comprometimento de renda, dias de caixa, margem

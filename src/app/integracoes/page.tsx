@@ -8,6 +8,8 @@ import { integracoes } from "@/lib/db/schema";
 import { asaasConfigurado } from "@/lib/integracoes/asaas/cliente";
 import { asaasSincronizando, type ResumoSincronizacao } from "@/lib/integracoes/asaas/sincronizar";
 import { formatarData } from "@/lib/formato";
+import { mercadoPagoConfigurado } from "@/lib/integracoes/mercadopago/cliente";
+import { mercadoPagoSincronizando, type ResumoMercadoPago } from "@/lib/integracoes/mercadopago/sincronizar";
 import { BotaoSincronizar } from "./botao-sincronizar";
 
 export default function PaginaIntegracoes() {
@@ -24,9 +26,9 @@ export default function PaginaIntegracoes() {
       <Suspense fallback={<Carregando />}>
         <Asaas />
       </Suspense>
-      <Cartao titulo="Mercado Pago">
-        <p className="text-sm text-suave">Em breve: recebimentos ocasionais e empréstimos do Mercado Crédito.</p>
-      </Cartao>
+      <Suspense fallback={<Carregando />}>
+        <MercadoPago />
+      </Suspense>
     </div>
   );
 }
@@ -92,6 +94,69 @@ async function Asaas() {
           <p className="text-xs text-suave">
             A sincronização também roda sozinha a cada 6 horas. Ela só lê dados: o app nunca cria cobranças nem move
             dinheiro no Asaas.
+          </p>
+        </div>
+      )}
+    </Cartao>
+  );
+}
+
+async function MercadoPago() {
+  await connection();
+  const db = obterDb();
+  const linha = await db.query.integracoes.findFirst({ where: eq(integracoes.id, "mercadopago") });
+  const configurado = mercadoPagoConfigurado();
+  const sincronizando = mercadoPagoSincronizando() || linha?.status === "sincronizando";
+  const dados = (linha?.dados as { ultimoResumo?: ResumoMercadoPago } | undefined) ?? {};
+  const resumo = dados.ultimoResumo;
+  const status = linha?.status ?? "nunca";
+  return (
+    <Cartao titulo="Mercado Pago (recebimentos e extrato da conta)">
+      {!configurado ? (
+        <div className="space-y-2 text-sm">
+          <p>Ainda não conectado. Para conectar:</p>
+          <ol className="ml-5 list-decimal space-y-1">
+            <li>
+              Entre em <strong>mercadopago.com.br/developers</strong> com a conta que quer acompanhar → <strong>Suas integrações</strong> →{" "}
+              <strong>Criar aplicação</strong> (qualquer nome, ex.: “Financeiro”).
+            </li>
+            <li>
+              Na aplicação, abra <strong>Credenciais de produção</strong> e copie o <strong>Access Token</strong> (começa com{" "}
+              <code>APP_USR-</code>).
+            </li>
+            <li>
+              Na VPS, adicione ao <code>.env</code>: <code>MERCADOPAGO_ACCESS_TOKEN=APP_USR-...</code> e rode <code>docker compose up -d</code>.
+            </li>
+          </ol>
+          <p className="text-xs text-suave">
+            Sem conectar, dá para importar o <strong>Relatório de Liberações</strong> (CSV) baixado do painel do Mercado Pago em Importar.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-4 text-sm">
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-1 md:grid-cols-4">
+            <dt className="text-suave">Situação</dt>
+            <dd className={status === "erro" ? "text-negativo" : status === "ok" ? "text-positivo" : ""}>
+              {sincronizando ? ROTULO_STATUS.sincronizando : (ROTULO_STATUS[status] ?? status)}
+            </dd>
+            <dt className="text-suave">Última sincronização</dt>
+            <dd>{linha?.ultimaSincronizacao ? linha.ultimaSincronizacao.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "—"}</dd>
+            <dt className="text-suave">Conta</dt>
+            <dd>{resumo?.conta ?? "—"}</dd>
+            <dt className="text-suave">Extrato trazido até</dt>
+            <dd>{linha?.extratoAte ? formatarData(linha.extratoAte) : resumo?.relatorioPendente ? "gerando…" : "—"}</dd>
+          </dl>
+          {status === "erro" && linha?.mensagem && <p className="text-negativo">{linha.mensagem}</p>}
+          {resumo && (
+            <p className="text-suave">
+              Última vez: {resumo.pagamentos} pagamento(s) recebido(s) atualizados, {resumo.lancamentosNovos} lançamento(s) novo(s) no extrato.
+              {resumo.avisos.length > 0 && <> {resumo.avisos.slice(0, 2).join(" ")}</>}
+            </p>
+          )}
+          <BotaoSincronizar sincronizando={sincronizando} desativado={!configurado} servico="mercadopago" />
+          <p className="text-xs text-suave">
+            Roda sozinha a cada 6 horas. Só lê: o app nunca cria cobranças nem move dinheiro. Empréstimos do Mercado Crédito não têm API:
+            cadastre-os em A pagar → Nova dívida.
           </p>
         </div>
       )}

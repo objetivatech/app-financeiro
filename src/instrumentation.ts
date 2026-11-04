@@ -28,6 +28,16 @@ export async function register() {
     setInterval(rodar, 6 * 60 * 60_000).unref();
   }
 
+  if (process.env.MERCADOPAGO_ACCESS_TOKEN && process.env.MERCADOPAGO_SINCRONIZACAO_AUTOMATICA !== "0") {
+    const { sincronizarMercadoPago } = await import("./lib/integracoes/mercadopago/sincronizar");
+    const rodarMp = () =>
+      sincronizarMercadoPago(obterDb())
+        .then((r) => console.log(`Mercado Pago sincronizado: ${r.pagamentos} pagamentos, ${r.lancamentosNovos} lançamentos novos`))
+        .catch((erro) => console.error("Sincronização automática do Mercado Pago falhou:", erro instanceof Error ? erro.message : erro));
+    setTimeout(rodarMp, 90_000).unref();
+    setInterval(rodarMp, 6 * 60 * 60_000).unref();
+  }
+
   // Inteligência interna: revisa os avisos a cada hora e, uma vez por semana, a IA escreve a carta
   // da semana (se houver chave da Anthropic; CARTA_SEMANAL=0 desliga a carta).
   const { atualizarAlertas } = await import("./lib/consultor/alertas");

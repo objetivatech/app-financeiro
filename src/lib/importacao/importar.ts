@@ -2,6 +2,7 @@ import { extrairComIa } from "../ia/extrator";
 import { iaDisponivel } from "../ia/cliente";
 import { decodificarTexto } from "./decodificar";
 import { detectarFormato } from "./detectar";
+import { lerRelatorioLiberacoes, pareceRelatorioMercadoPago } from "../integracoes/mercadopago/mapear";
 import { parseCsv } from "./parsers/csv";
 import { parseOfx } from "./parsers/ofx";
 import { ErroImportacao, type ExtratoNormalizado } from "./tipos";
@@ -37,6 +38,8 @@ export async function lerArquivo(
       return parseOfx(decodificarTexto(bytes));
     case "csv": {
       const texto = decodificarTexto(bytes);
+      // Relatório de Liberações baixado do painel do Mercado Pago.
+      if (pareceRelatorioMercadoPago(texto)) return lerRelatorioLiberacoes(texto);
       const { extrato } = parseCsv(texto, nomeArquivo);
       if (extrato && extrato.transacoes.length > 0) return extrato;
       exigirIa("Não reconheci as colunas deste CSV.");

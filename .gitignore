@@ -32,6 +32,8 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# O modelo, sem segredos, vai para o repositório.
+!.env.example
 
 # vercel
 .vercel

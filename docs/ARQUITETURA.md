@@ -81,6 +81,14 @@ nova tentativa em 429/5xx) e sincronização em quatro passos:
    `gravarExtrato` usado pelos arquivos. Tipos conhecidos (recebimento, taxas, fatura do cartão Asaas) já chegam
    classificados; recebimentos são conciliados com a cobrança (`compromissos.transacao_id`).
 
+**Mercado Pago** (`integracoes/mercadopago`): `GET /users/me` (CPF/CNPJ → escopo da conta e titular),
+`GET /v1/payments/search` (pagamentos em que a conta é recebedora → `compromissos` *receber*, origem `mercadopago`) e o
+Relatório de Liberações: `POST /v1/account/release_report` (período), `GET .../list` até o arquivo aparecer e
+`GET .../{file_name}` (CSV). O relatório é assíncrono: o pedido fica em `integracoes.dados.relatorioPendente` e é
+buscado na próxima sincronização se não ficar pronto em ~1 min. Se a criação pedir configuração, o app cria uma padrão
+(`/v1/account/release_report/config`). Falhas do extrato viram aviso e não derrubam a sincronização. `mapear.ts` lê o CSV
+(só linhas `release`; valor = NET_CREDIT − NET_DEBIT) e também atende ao CSV baixado do painel (Importar).
+
 Na primeira sincronização: 13 meses de cobranças e notas; o extrato começa depois do último lançamento já
 importado por arquivo nessa conta, para não duplicar.
 
