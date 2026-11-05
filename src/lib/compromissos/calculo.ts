@@ -143,6 +143,8 @@ export interface CompromissoParaConciliar {
   padraoExtrato: string | null;
   /** Padrão alternativo (ex.: guias de imposto), que permite a mesma tolerância de valor sem exigir casar. */
   padraoRegex?: RegExp | null;
+  /** Diferença de valor aceita quando o padrão casa (padrão 5%; impostos estimados aceitam mais). */
+  tolerancia?: number;
 }
 
 export interface TransacaoParaConciliar {
@@ -186,7 +188,7 @@ export function casarPagamentos(
         const casaPadrao =
           (c.padraoExtrato ? t.descricaoNormalizada.includes(c.padraoExtrato) : false) || Boolean(c.padraoRegex?.test(t.descricaoNormalizada));
         if (valor === c.valorCentavos) return c.padraoExtrato ? casaPadrao : true;
-        return casaPadrao && Math.abs(valor - c.valorCentavos) <= c.valorCentavos * TOLERANCIA_VALOR;
+        return casaPadrao && Math.abs(valor - c.valorCentavos) <= c.valorCentavos * (c.tolerancia ?? TOLERANCIA_VALOR);
       })
       .sort((a, b) => dias(a.data, c.vencimento) - dias(b.data, c.vencimento));
     const escolhida = candidatas[0];

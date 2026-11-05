@@ -7,7 +7,9 @@ import { Cartao, Carregando, Valor } from "@/components/ui";
 import { obterDb } from "@/lib/db";
 import { indicadoresFiscais } from "@/lib/fiscal/indicadores";
 import { INSS_PRO_LABORE, LIMITE_FATOR_R } from "@/lib/fiscal/simples";
-import { deslocarMes, formatarMes, formatarMoeda } from "@/lib/formato";
+import { contasFixasDeImposto, guiasPagasNoMes, impostosPorCompetencia } from "@/lib/fiscal/impostos-a-pagar";
+import { hojeBrasil } from "@/lib/datas";
+import { deslocarMes, formatarData, formatarMes, formatarMoeda } from "@/lib/formato";
 
 export default function PaginaImpostos() {
   return (
@@ -94,6 +96,8 @@ async function Conteudo() {
         </p>
       )}
 
+      <ImpostosAPagar />
+
       <div className="grid gap-3 md:grid-cols-3">
         <Cartao titulo="Fator R (últimos 12 meses)">
           <div className={`text-2xl font-semibold ${d.fatorR >= LIMITE_FATOR_R ? "text-positivo" : "text-negativo"}`}>{pct(d.fatorR)}</div>
@@ -163,5 +167,140 @@ async function Conteudo() {
         </p>
       </Cartao>
     </>
+  );
+}
+
+const SITUACAO_TOM = { pago: "text-positivo", aberto: "text-suave", vencido: "text-negativo", andamento: "text-alerta" } as const;
+
+/** DAS + INSS por competência (mês das notas), com vencimento no dia 20 do mês seguinte. */
+async function ImpostosAPagar() {
+  const db = obterDb();
+  const [lista, fixas] = await Promise.all([impostosPorCompetencia(db, 6), contasFixasDeImposto(db)]);
+  const hoje = hojeBrasil();
+  const atual = hoje.slice(0, 7);
+  // Competências antigas sem conta a pagar: confere o que saiu de guia no extrato do mês do vencimento.
+  const extrato = new Map(
+    await Promise.all(
+      lista.filter((c) => !c.dasPago && !c.inssPago && c.vencimento < hoje).map(async (c) => [c.competencia, await guiasPagasNoMes(db, c.vencimento.slice(0, 7))] as const),
+    ),
+  );
+  const linhas = lista.map((c) => {
+    const estimado = (c.dasCentavos ?? 0) + c.inssCentavos;
+    const pagoReal = (c.dasPago?.valorCentavos ?? 0) + (c.inssPago?.valorCentavos ?? 0);
+    const noExtrato = extrato.get(c.competencia);
+    const pagoExtrato = noExtrato ? noExtrato.das + noExtrato.inss : 0;
+    const situacao: keyof typeof SITUACAO_TOM =
+      c.competencia === atual ? "andamento" : pagoReal > 0 || pagoExtrato > 0 ? "pago" : c.vencimento < hoje ? "vencido" : "aberto";
+    return { ...c, estimado, pago: pagoReal || pagoExtrato, situacao };
+  });
+  const proxima = linhas.find((l) => l.competencia < atual && l.vencimento >= hoje && l.situacao !== "pago");
+  const andamento = linhas.find((l) => l.competencia === atual);
+
+  return (
+    <Cartao titulo={<>Impostos a pagar (dia 20) <LinkAjuda secao="impostos-a-pagar" /></>}>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <div className="text-xs text-suave">Próximo vencimento</div>
+          {proxima ? (
+            <>
+              <div className="text-2xl font-semibold">
+                <Valor centavos={proxima.estimado} />
+              </div>
+              <div className="text-xs text-suave">
+                em {formatarData(proxima.vencimento)} · competência {formatarMes(proxima.competencia)}: DAS{" "}
+                {proxima.dasCentavos === null ? "fixo do MEI" : formatarMoeda(proxima.dasCentavos)} + INSS {formatarMoeda(proxima.inssCentavos)}
+              </div>
+            </>
+          ) : (
+            <div className="text-sm text-suave">Nada pendente da competência passada.</div>
+          )}
+        </div>
+        {andamento && (
+          <div>
+            <div className="text-xs text-suave">Já acumulado para {formatarData(andamento.vencimento)}</div>
+            <div className="text-2xl font-semibold">
+              <Valor centavos={andamento.estimado} />
+            </div>
+            <div className="text-xs text-suave">
+              {formatarMes(andamento.competencia)} ainda em andamento: cresce a cada nota emitida ({andamento.quantidadeNotas} até agora).
+            </div>
+          </div>
+        )}
+      </div>
+
+      {fixas.length > 0 && (
+        <p className="mt-3 rounded-md border border-alerta/40 bg-alerta/10 p-2 text-xs">
+          Você tem conta fixa para {fixas.map((f) => `"${f.descricao}"`).join(", ")} em A pagar. Enquanto ela existir, o app não lança a estimativa
+          pelas notas para esse imposto (contaria em dobro). Para usar a estimativa, encerre a conta fixa em{" "}
+          <Link href="/pagar" className="underline">A pagar</Link>.
+        </p>
+      )}
+
+      <div className="mt-4 overflow-x-auto">
+        <table className="w-full min-w-[640px] text-sm">
+          <thead className="text-left text-xs text-suave">
+            <tr>
+              <th className="py-1 pr-2 font-medium">Competência</th>
+              <th className="py-1 pr-2 text-right font-medium">Receita (notas)</th>
+              <th className="py-1 pr-2 font-medium">Alíquota</th>
+              <th className="py-1 pr-2 text-right font-medium">DAS</th>
+              <th className="py-1 pr-2 text-right font-medium">INSS</th>
+              <th className="py-1 pr-2 text-right font-medium">Total</th>
+              <th className="py-1 pr-2 font-medium">Vence</th>
+              <th className="py-1 font-medium">Situação</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[...linhas].reverse().map((l) => (
+              <tr key={l.competencia} className="border-t border-borda align-top">
+                <td className="py-1 pr-2">{formatarMes(l.competencia)}</td>
+                <td className="py-1 pr-2 text-right">
+                  <Valor centavos={l.receitaCentavos} />
+                  <div className="text-xs text-suave">{l.quantidadeNotas} nota(s)</div>
+                </td>
+                <td className="py-1 pr-2 text-xs">
+                  {l.regime === "mei" ? (
+                    "MEI (valor fixo)"
+                  ) : (
+                    <>
+                      Anexo {l.anexo} · {pct(l.aliquotaEfetiva ?? 0, 2)}
+                      <div className="text-suave">
+                        RBT12 {formatarMoeda(l.rbt12Centavos)}
+                        {l.fatorR !== null && ` · Fator R ${pct(l.fatorR)}`}
+                      </div>
+                      {l.issRetidoDeduzidoCentavos > 0 && <div className="text-suave">− ISS retido {formatarMoeda(l.issRetidoDeduzidoCentavos)}</div>}
+                    </>
+                  )}
+                </td>
+                <td className="py-1 pr-2 text-right">{l.dasCentavos === null ? "—" : <Valor centavos={l.dasCentavos} />}</td>
+                <td className="py-1 pr-2 text-right">
+                  <Valor centavos={l.inssCentavos} />
+                </td>
+                <td className="py-1 pr-2 text-right font-medium">
+                  <Valor centavos={l.estimado} />
+                </td>
+                <td className="py-1 pr-2">{formatarData(l.vencimento)}</td>
+                <td className={`py-1 text-xs ${SITUACAO_TOM[l.situacao]}`}>
+                  {l.situacao === "pago"
+                    ? `pago ${formatarMoeda(l.pago)}${l.estimado ? ` (estimado ${formatarMoeda(l.estimado)}; diferença ${formatarMoeda(l.pago - l.estimado)})` : ""}`
+                    : l.situacao === "andamento"
+                      ? "mês em andamento"
+                      : l.situacao === "vencido"
+                        ? "sem pagamento encontrado"
+                        : "a pagar"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-3 text-xs text-suave">
+        Competência é o mês das notas; o imposto vence no dia 20 do mês seguinte (antes, se cair em fim de semana ou feriado). DAS =
+        receita do mês × alíquota efetiva (RBT12 dos 12 meses anteriores e anexo pelo Fator R daquele mês); nas notas com ISS retido pelo
+        cliente, a parte do ISS sai do DAS. INSS = 11% do pró-labore. Os valores entram em{" "}
+        <Link href="/pagar" className="underline">A pagar</Link> e no fluxo de caixa e dão baixa quando a guia aparece no extrato
+        (o valor real substitui a estimativa). O oficial é o PGDAS-D da contabilidade.
+      </p>
+    </Cartao>
   );
 }

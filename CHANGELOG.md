@@ -3,6 +3,17 @@
 Todas as mudanças relevantes do app, da mais recente para a mais antiga. O formato segue
 [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e as versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.12.0] — 2026-11-05
+
+### Adicionado
+- **Impostos a pagar (dia 20)** em Impostos: o DAS e o INSS de cada competência (mês das notas), com vencimento no
+  dia 20 do mês seguinte (antecipado em fim de semana e feriado), o próximo vencimento, o que já acumulou no mês em
+  andamento e o cálculo aberto (receita, RBT12, Fator R, anexo, alíquota). Entram sozinhos em A pagar e no fluxo de
+  caixa e dão baixa quando a guia aparece no extrato, mostrando a diferença entre o estimado e o pago.
+- Notas com **ISS retido** pelo cliente (lido do Asaas) tiram a parte do ISS do DAS.
+- **Taxas e tarifas** (`/taxas`, menu Empresa): tudo o que o Asaas e os bancos PJ cobram, por tipo (notificação, Pix,
+  boleto, cartão, nota fiscal, transferência…), mês a mês, peso na receita e cada lançamento.
+
 ## [0.11.0] — 2026-11-05
 
 ### Adicionado

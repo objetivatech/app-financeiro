@@ -1,0 +1,1 @@
+ALTER TABLE "notas_fiscais" ADD COLUMN "iss_retido" boolean DEFAULT false NOT NULL;

@@ -134,6 +134,8 @@ export interface AsaasNota {
   serviceDescription?: string;
   municipalServiceCode?: string;
   pdfUrl?: string;
+  /** Impostos da nota; retainIss = ISS retido pelo tomador. */
+  taxes?: { retainIss?: boolean; iss?: number };
 }
 
 export interface AsaasLancamento {
