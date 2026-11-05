@@ -3,6 +3,13 @@
 Todas as mudanças relevantes do app, da mais recente para a mais antiga. O formato segue
 [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e as versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.9.3] — 2026-11-05
+
+### Corrigido
+- **Leitura de PDF/foto pela IA** (ex.: faturas do cartão Asaas) falhava com erro 400 ("Schemas contains too many
+  parameters with union types"): o formato pedido à IA passou do limite de campos opcionais da API ao ganhar o final do
+  cartão por compra. Reduzido, com um teste que impede voltar a passar do limite.
+
 ## [0.9.2] — 2026-11-04
 
 ### Corrigido

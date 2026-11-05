@@ -6,24 +6,27 @@ import type { ExtratoNormalizado, FormatoArquivo } from "../importacao/tipos";
 import { parseData } from "../importacao/util";
 import { ErroIa, modeloDa, obterClienteIa, opcoesDeFallback, registrarUso } from "./cliente";
 
-const EsquemaExtrato = z.object({
-  instituicao_nome: z.string().nullable().describe("Nome do banco/instituição/emissor como aparece no documento"),
+/**
+ * Esquema da leitura por IA. A API de saída estruturada aceita no máximo 16 campos opcionais
+ * (nullable/union) por esquema: textos ausentes vêm como "" e só números/enum usam null.
+ */
+export const EsquemaExtrato = z.object({
+  instituicao_nome: z.string().describe("Nome do banco/instituição/emissor como aparece no documento; vazio se não houver"),
   instituicao_id: z
     .string()
-    .nullable()
-    .describe("id do catálogo de instituições, se for uma delas; senão null"),
+    .describe("id do catálogo de instituições, se for uma delas; senão vazio"),
   tipo_conta: z.enum(["corrente", "pagamento", "poupanca", "cartao_credito", "investimento"]).nullable(),
-  titular: z.string().nullable(),
-  documento_titular: z.string().nullable().describe("CPF ou CNPJ do titular, só dígitos, se aparecer"),
-  agencia: z.string().nullable(),
-  numero_conta: z.string().nullable(),
-  final_cartao: z.string().nullable().describe("Últimos 4 dígitos do cartão, se for fatura"),
-  periodo_inicio: z.string().nullable().describe("AAAA-MM-DD"),
-  periodo_fim: z.string().nullable().describe("AAAA-MM-DD"),
+  titular: z.string().describe("vazio se não houver"),
+  documento_titular: z.string().describe("CPF ou CNPJ do titular, só dígitos, se aparecer; vazio se não houver"),
+  agencia: z.string().describe("vazio se não houver"),
+  numero_conta: z.string().describe("vazio se não houver"),
+  final_cartao: z.string().describe("Últimos 4 dígitos do cartão, se for fatura; vazio se não houver"),
+  periodo_inicio: z.string().describe("AAAA-MM-DD; vazio se não houver"),
+  periodo_fim: z.string().describe("AAAA-MM-DD; vazio se não houver"),
   saldo_final: z.number().nullable().describe("Saldo final em reais (ou total da fatura, negativo), se aparecer"),
   moeda: z.string().describe("Código ISO da moeda, ex.: BRL"),
-  fatura_vencimento: z.string().nullable().describe("Só em fatura de cartão: data de vencimento, AAAA-MM-DD"),
-  fatura_fechamento: z.string().nullable().describe("Só em fatura de cartão: data de fechamento/corte, AAAA-MM-DD"),
+  fatura_vencimento: z.string().describe("Só em fatura de cartão: data de vencimento, AAAA-MM-DD; vazio se não houver"),
+  fatura_fechamento: z.string().describe("Só em fatura de cartão: data de fechamento/corte, AAAA-MM-DD; vazio se não houver"),
   fatura_total: z.number().nullable().describe("Só em fatura de cartão: total a pagar em reais, positivo"),
   fatura_minimo: z.number().nullable().describe("Só em fatura de cartão: pagamento mínimo em reais, positivo"),
   transacoes: z.array(
@@ -31,14 +34,14 @@ const EsquemaExtrato = z.object({
       data: z.string().describe("AAAA-MM-DD"),
       descricao: z.string(),
       valor: z.number().describe("Em reais. Positivo = entrada de dinheiro; negativo = saída/compra"),
-      nome_contraparte: z.string().nullable(),
-      documento_contraparte: z.string().nullable().describe("CPF/CNPJ da contraparte, só dígitos, se aparecer"),
+      nome_contraparte: z.string().describe("vazio se não houver"),
+      documento_contraparte: z.string().describe("CPF/CNPJ da contraparte, só dígitos, se aparecer; vazio se não houver"),
       parcela_atual: z.number().int().nullable(),
-      final_cartao: z.string().nullable().describe("Fatura: últimos 4 dígitos do cartão desta compra (físico, virtual ou adicional), quando a fatura separa por cartão"),
+      final_cartao: z.string().describe("Fatura: últimos 4 dígitos do cartão desta compra (físico, virtual ou adicional), quando a fatura separa por cartão; vazio se não houver"),
       parcela_total: z.number().int().nullable(),
     }),
   ),
-  observacoes: z.string().nullable().describe("Qualquer coisa ilegível, cortada ou duvidosa"),
+  observacoes: z.string().describe("Qualquer coisa ilegível, cortada ou duvidosa; vazio se não houver"),
 });
 
 const SISTEMA = `Você extrai dados de extratos bancários e faturas de cartão brasileiros com precisão contábil.
@@ -156,10 +159,10 @@ export async function extrairComIa(entrada: EntradaExtracao): Promise<ExtratoNor
         data,
         descricao: t.descricao,
         valorCentavos: Math.round(t.valor * 100),
-        nomeContraparte: t.nome_contraparte ?? undefined,
-        documentoContraparte: t.documento_contraparte?.replace(/\D/g, "") || undefined,
+        nomeContraparte: t.nome_contraparte.trim() || undefined,
+        documentoContraparte: t.documento_contraparte.replace(/\D/g, "") || undefined,
         parcela: t.parcela_atual && t.parcela_total ? { atual: t.parcela_atual, total: t.parcela_total } : undefined,
-        finalCartao: t.final_cartao?.replace(/\D/g, "").slice(-4) || undefined,
+        finalCartao: t.final_cartao.replace(/\D/g, "").slice(-4) || undefined,
       },
     ];
   });
@@ -186,14 +189,14 @@ export async function extrairComIa(entrada: EntradaExtracao): Promise<ExtratoNor
     formato: entrada.formato,
     fatura,
     instituicaoId: instituicaoId ?? undefined,
-    instituicaoNomeLido: dados.instituicao_nome ?? undefined,
+    instituicaoNomeLido: dados.instituicao_nome.trim() || undefined,
     conta: {
       tipo: dados.tipo_conta ?? undefined,
-      titular: dados.titular ?? undefined,
-      documentoTitular: dados.documento_titular?.replace(/\D/g, "") || undefined,
-      agencia: dados.agencia ?? undefined,
-      numero: dados.numero_conta ?? undefined,
-      finalCartao: dados.final_cartao ?? undefined,
+      titular: dados.titular.trim() || undefined,
+      documentoTitular: dados.documento_titular.replace(/\D/g, "") || undefined,
+      agencia: dados.agencia.trim() || undefined,
+      numero: dados.numero_conta.trim() || undefined,
+      finalCartao: dados.final_cartao.replace(/\D/g, "").slice(-4) || undefined,
     },
     periodo: inicio && fim ? { inicio, fim } : undefined,
     saldoFinalCentavos: dados.saldo_final !== null ? Math.round(dados.saldo_final * 100) : undefined,
