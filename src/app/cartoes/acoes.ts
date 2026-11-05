@@ -2,7 +2,8 @@
 
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { alternarVinculado, excluirFatura, excluirVinculado, registrarFatura, salvarVinculado } from "@/lib/cartoes/servico";
+import { alternarVinculado, excluirFatura, excluirVinculado, marcarFaturaPaga, registrarFatura, salvarVinculado } from "@/lib/cartoes/servico";
+import { hojeBrasil } from "@/lib/datas";
 import { atualizarAlertas } from "@/lib/consultor/alertas";
 import type { RetornoAcao } from "@/components/formulario";
 import { reabrirClassificacaoDaConta, reclassificarEmSegundoPlano } from "@/lib/classificacao/executar";
@@ -88,6 +89,15 @@ export async function removerFatura(fd: FormData): Promise<RetornoAcao> {
   await excluirFatura(obterDb(), Number(fd.get("id")));
   atualizarTelas();
   return { ok: "Fatura excluída." };
+}
+
+/** Marca a fatura como paga (pagamento que não está em nenhum extrato) ou desfaz. */
+export async function marcarFatura(fd: FormData): Promise<RetornoAcao> {
+  const db = obterDb();
+  await marcarFaturaPaga(db, Number(fd.get("id")), fd.get("paga") === "1" ? hojeBrasil() : null);
+  await atualizarAlertas(db, { atualizarCompromissos: false }).catch(() => undefined);
+  atualizarTelas();
+  return null;
 }
 
 /** Cadastra (ou renomeia) um cartão virtual ou adicional de um cartão. */

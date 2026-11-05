@@ -358,14 +358,34 @@ Cadastre cada cartão e envie as faturas; o app calcula o resto.
 **Editar cartão**.
 
 **Enviar fatura:** o botão em cada cartão abre o Importar já com o cartão escolhido. Do PDF, o app lê as compras, as
-parcelas ("3/10"), o **vencimento**, o **total** e o **mínimo**, e lança a fatura em [A pagar](#pagar). Quando o
-pagamento aparece no extrato da conta que paga o cartão, a fatura é baixada e a saída vira "pagamento de fatura" (não é
-gasto: as compras já foram contadas). Sem o PDF, use **Lançar fatura à mão** (vencimento e total).
+parcelas ("3/10"), o **vencimento**, o **total** e o **mínimo**, e lança a fatura em [A pagar](#pagar). Sem o PDF, use
+**Lançar fatura à mão** (vencimento e total).
+
+<a id="fatura-paga"></a>
+
+**Como o app sabe que a fatura foi paga**
+
+- Ele soma os pagamentos feitos **entre o fechamento da fatura e o fechamento da seguinte**, vindos do extrato da conta
+  que paga o cartão (ex.: "Pagamento de fatura" no Asaas) ou do crédito "Pagamento recebido" que aparece na própria
+  fatura. Pagar **em várias vezes** funciona: as parcelas do pagamento se somam até quitar.
+- O mesmo pagamento visto nos dois lados (na conta e na fatura) **não conta em dobro**.
+- Pagamento feito **antes do fechamento** já está dentro do total da fatura seguinte (como crédito), então não é contado
+  de novo.
+- **Só a fatura mais recente pode estar em aberto.** Se uma fatura antiga não foi quitada, o que faltou já foi cobrado
+  na seguinte (saldo anterior + juros): ela aparece como **"não quitada: passou para a fatura seguinte"** e sai de A
+  pagar, para não virar uma segunda dívida.
+- Em **Faturas registradas**, cada fatura mostra a situação (paga, paga em parte e quanto falta, a pagar, vencida) e os
+  pagamentos encontrados. Se você pagou por um meio que não está em nenhum extrato importado, use **marcar como paga**
+  (dá para desfazer). Marcar como pago em [A pagar](#pagar) tem o mesmo efeito.
+- A saída do extrato que pagou a fatura vira "pagamento de fatura" (não é gasto: as compras já foram contadas).
 
 **O que a tela mostra**
 
 - **Fatura em aberto**, **parcelado a vencer** (parcelas que ainda vão cair, compra por compra) e **limite usado**
-  (fatura em aberto + parcelas futuras ÷ limite; o ideal é ficar em até 30%).
+  (o que falta pagar da fatura em aberto + parcelas das faturas seguintes ÷ limite; o ideal é ficar em até 30%). As
+  parcelas que já estão numa fatura registrada não contam de novo, e a mesma compra lida de jeitos diferentes em
+  faturas diferentes (descrição ou centavos) conta uma vez só. As compras do ciclo atual, ainda sem fatura, não entram:
+  por isso o limite usado pode ficar um pouco abaixo do que o banco mostra.
 - **Próximas faturas:** a fatura conhecida ou, nos meses seguintes, só as parcelas já contratadas. As compras novas vêm
   por cima — a **média de compras à vista** dá a ideia de quanto.
 - **Juros e encargos** dos últimos 3 meses (juros, IOF, multa, anuidade, rotativo): qualquer valor aqui é dinheiro

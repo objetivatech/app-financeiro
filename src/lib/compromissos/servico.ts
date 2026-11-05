@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, ne, notInArray, or, sql } from "drizzle-orm";
 import { hojeBrasil, somarDias } from "../datas";
 import type { Db } from "../db";
-import { previsaoCartoesParaFluxo } from "../cartoes/servico";
+import { conciliarFaturas, previsaoCartoesParaFluxo } from "../cartoes/servico";
 import { compromissos, contas, dividas, faturas, importacoes, integracoes, recorrencias, transacoes } from "../db/schema";
 import { casarPagamentos, PADRAO_GUIA_IMPOSTO, taxaMensal, vencimentosMensais, type ParcelaPlanejada } from "./calculo";
 
@@ -105,6 +105,8 @@ export async function criarContaAvulsa(
 }
 
 export async function marcarPago(db: Db, id: number, data: string): Promise<void> {
+  // Fatura de cartão: a marcação fica na fatura (a conciliação das faturas respeita).
+  await db.update(faturas).set({ pagaEm: data }).where(eq(faturas.compromissoId, id));
   await db
     .update(compromissos)
     .set({ status: "pago", dataPagamento: data, atualizadoEm: new Date() })
@@ -113,6 +115,7 @@ export async function marcarPago(db: Db, id: number, data: string): Promise<void
 
 export async function desfazerPagamento(db: Db, id: number): Promise<void> {
   const hoje = hojeBrasil();
+  await db.update(faturas).set({ pagaEm: null }).where(eq(faturas.compromissoId, id));
   await db
     .update(compromissos)
     .set({
@@ -190,7 +193,8 @@ export async function atualizarCompromissos(db: Db): Promise<{ gerados: number; 
     .from(compromissos)
     .leftJoin(recorrencias, eq(recorrencias.id, compromissos.recorrenciaId))
     .leftJoin(dividas, eq(dividas.id, compromissos.dividaId))
-    .where(and(eq(compromissos.tipo, "pagar"), inArray(compromissos.status, ["aberto", "vencido"]), lte(compromissos.vencimento, somarDias(hoje, 7))));
+    // Faturas de cartão têm conciliação própria (pagamento em várias vezes, saldo que rola): conciliarFaturas.
+    .where(and(eq(compromissos.tipo, "pagar"), ne(compromissos.origem, "fatura"), inArray(compromissos.status, ["aberto", "vencido"]), lte(compromissos.vencimento, somarDias(hoje, 7))));
   let conciliados = 0;
   if (pendentes.length > 0) {
     const datas = pendentes.map((p) => p.vencimento).sort();
@@ -251,6 +255,7 @@ export async function atualizarCompromissos(db: Db): Promise<{ gerados: number; 
       conciliados++;
     }
   }
+  conciliados += await conciliarFaturas(db);
   return { gerados, conciliados };
 }
 

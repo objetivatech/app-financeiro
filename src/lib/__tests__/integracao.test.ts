@@ -25,7 +25,7 @@ import { sincronizarMercadoPago } from "../integracoes/mercadopago/sincronizar";
 import { cancelarFila, enfileirar, estadoFila, retomarFila, situacaoDosTrabalhos } from "../importacao/fila";
 import { gravarExtrato, importarParaBanco, registrarFinaisDaFatura } from "../importacao/persistir";
 import { somarMeses } from "../cartoes/calculo";
-import { registrarFatura, resumoCartoes } from "../cartoes/servico";
+import { marcarFaturaPaga, registrarFatura, resumoCartoes } from "../cartoes/servico";
 import { visaoConsolidada } from "../visoes/calculo";
 import { alertasDasTransacoes, alertasParaJanela, atualizarAlertas, contarAlertasAtivos, dispensarAlerta, listarAlertasAtivos, marcarVistos } from "../consultor/alertas";
 import { ferramentasDoConsultor } from "../consultor/ferramentas";
@@ -356,6 +356,55 @@ describe.skipIf(!url)("importação + classificação no banco", () => {
     expect(depois.faturaAberta?.vencimento).toBe(venc2);
     const pagamento = await db.query.transacoes.findFirst({ where: (t, { eq }) => eq(t.hashDedup, "teste-fatura") });
     expect(pagamento).toMatchObject({ natureza: "pagamento_fatura", categoriaId: "mov_fatura" });
+  });
+
+  it("cartão: só a fatura mais recente fica em aberto, pagamento em várias vezes e marcação manual", async () => {
+    const hoje = hojeBrasil();
+    const [contaAsaas] = await db.insert(schema.contas).values({ instituicaoNome: "Asaas", apelido: "Asaas conta teste", tipo: "pagamento", escopoPadrao: "PJ" }).returning();
+    const [cartao] = await db
+      .insert(schema.contas)
+      .values({ instituicaoNome: "Asaas", apelido: "Asaas Master teste", tipo: "cartao_credito", escopoPadrao: "PJ", diaFechamento: 5, diaVencimento: 10, limiteCentavos: 1_000_000, contaPagamentoId: contaAsaas.id })
+      .returning();
+    // Três faturas já fechadas e a do mês (que fechou há pouco).
+    const venc = (meses: number) => somarMeses(`${hoje.slice(0, 7)}-01`, meses, 10);
+    const atual = venc(hoje.slice(8) >= "06" ? 0 : -1);
+    const [v3, v2, v1] = [somarMeses(atual, -1, 10), somarMeses(atual, -2, 10), somarMeses(atual, -3, 10)];
+    for (const [vencimento, valor] of [[v1, 38_127], [v2, 71_255], [v3, 171_775], [atual, 206_723]] as const) {
+      await registrarFatura(db, { contaId: cartao.id, vencimento, valorCentavos: valor, origem: "manual" });
+    }
+    // Fatura v3 paga em duas vezes pela conta Asaas (a API do Asaas já marca como pagamento de fatura).
+    const saida = (data: string, valor: number, n: string) => ({
+      contaId: contaAsaas.id, data, descricao: "Pagamento de fatura do cartão Asaas", descricaoNormalizada: "PAGAMENTO DE FATURA DO CARTAO ASAAS",
+      valorCentavos: -valor, natureza: "pagamento_fatura" as const, classificadoPor: "heuristica" as const, hashDedup: `asaas-fatura-${n}`,
+    });
+    await db.insert(schema.transacoes).values([saida(somarDias(v3, -2), 100_000, "a"), saida(somarDias(v3, 5), 71_775, "b")]);
+    await atualizarCompromissos(db);
+
+    const [r] = (await resumoCartoes(db)).filter((c) => c.conta.id === cartao.id);
+    const st = Object.fromEntries(r.faturas.map((f) => [f.vencimento, f.status]));
+    expect(st).toEqual({ [v1]: "rolada", [v2]: "rolada", [v3]: "paga", [atual]: atual < hoje ? "vencida" : "aberta" });
+    expect(r.faturas.find((f) => f.vencimento === v3)?.pagamentos).toHaveLength(2);
+    expect(r.faturaAberta).toMatchObject({ vencimento: atual, valorCentavos: 206_723 });
+    expect(r.limiteUsadoCentavos).toBe(206_723);
+    // Em A pagar só sobra a fatura do mês (as roladas saíram: já estão nela).
+    const aPagar = await db.query.compromissos.findMany({ where: (c, { and, eq, inArray }) => and(eq(c.origem, "fatura"), inArray(c.status, ["aberto", "vencido"])) });
+    expect(aPagar.filter((c) => c.idExterno?.startsWith(`${cartao.id}:`)).map((c) => c.vencimento)).toEqual([atual]);
+
+    // Pagamento parcial da fatura do mês, depois do fechamento.
+    await db.insert(schema.transacoes).values(saida(somarDias(atual, -3) > hoje ? hoje : somarDias(atual, -3), 50_000, "c"));
+    await atualizarCompromissos(db);
+    const [parcial] = (await resumoCartoes(db)).filter((c) => c.conta.id === cartao.id);
+    expect(parcial.faturaAberta).toMatchObject({ valorCentavos: 156_723, pagoCentavos: 50_000, status: "parcial" });
+
+    // Marcar como paga à mão (pagamento fora dos extratos) e desfazer.
+    const id = parcial.faturas.find((f) => f.vencimento === atual)!.id;
+    await marcarFaturaPaga(db, id, hoje);
+    const [marcada] = (await resumoCartoes(db)).filter((c) => c.conta.id === cartao.id);
+    expect(marcada.faturaAberta).toBeNull();
+    expect(marcada.faturas.find((f) => f.id === id)).toMatchObject({ status: "paga", manual: true });
+    await marcarFaturaPaga(db, id, null);
+    const [desfeita] = (await resumoCartoes(db)).filter((c) => c.conta.id === cartao.id);
+    expect(desfeita.faturaAberta?.status).toBe("parcial");
   });
 
   it("classificadores complementares: estabelecimento conhecido e CNPJ → CNAE, sem IA", async () => {

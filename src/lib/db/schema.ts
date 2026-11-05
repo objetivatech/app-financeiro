@@ -393,6 +393,8 @@ export const faturas = pgTable(
     importacaoId: integer("importacao_id").references(() => importacoes.id, { onDelete: "set null" }),
     compromissoId: integer("compromisso_id").references(() => compromissos.id, { onDelete: "set null" }),
     origem: text("origem").notNull().default("importacao"),
+    /** Você marcou como paga (quando o pagamento não aparece em nenhum extrato importado). */
+    pagaEm: date("paga_em"),
     criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("faturas_conta_vencimento_idx").on(t.contaId, t.vencimento)],

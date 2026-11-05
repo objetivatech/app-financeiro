@@ -10,7 +10,8 @@ import { atualizarCompromissos } from "@/lib/compromissos/servico";
 import { obterDb } from "@/lib/db";
 import { formatarData, formatarMoeda, formatarPercentual } from "@/lib/formato";
 import { INSTITUICOES } from "@/lib/instituicoes/catalogo";
-import { alternarCartaoVinculado, novoVinculado, removerCartaoVinculado, removerFatura } from "./acoes";
+import { alternarCartaoVinculado, marcarFatura, novoVinculado, removerCartaoVinculado, removerFatura } from "./acoes";
+import { hojeBrasil } from "@/lib/datas";
 import { FormCartao, FormFatura } from "./formularios";
 
 export default function PaginaCartoes() {
@@ -32,7 +33,23 @@ export default function PaginaCartoes() {
   );
 }
 
-const STATUS: Record<string, string> = { aberto: "a pagar", vencido: "vencida", pago: "paga", cancelado: "cancelada" };
+const FONTE = { cartao: "crédito na fatura", conta: "saída no extrato" } as const;
+
+/** Texto da situação de uma fatura registrada. */
+function situacao(f: ResumoCartao["faturas"][number]): { texto: string; tom: string } {
+  switch (f.status) {
+    case "paga":
+      return { texto: f.manual ? `paga (marcada por você em ${formatarData(f.pagaEm!)})` : `paga${f.pagaEm ? ` em ${formatarData(f.pagaEm)}` : ""}`, tom: "text-positivo" };
+    case "parcial":
+      return { texto: `paga em parte: ${formatarMoeda(f.pagoCentavos)} · faltam ${formatarMoeda(f.restanteCentavos)}`, tom: "text-alerta" };
+    case "rolada":
+      return { texto: `não quitada: ${formatarMoeda(f.restanteCentavos)} passaram para a fatura seguinte (com juros)`, tom: "text-alerta" };
+    case "vencida":
+      return { texto: "vencida, sem pagamento encontrado", tom: "text-negativo" };
+    default:
+      return { texto: "a pagar", tom: "text-suave" };
+  }
+}
 
 async function Conteudo() {
   await connection();
@@ -131,8 +148,9 @@ function CartaoDetalhe({ c, contas, emissores }: { c: ResumoCartao; contas: { id
               {c.faturaAberta ? (
                 <>
                   <Valor centavos={c.faturaAberta.valorCentavos} />{" "}
-                  <span className={`text-xs ${c.faturaAberta.status === "vencido" ? "text-negativo" : "text-suave"}`}>
-                    {c.faturaAberta.status === "vencido" ? "vencida" : "vence"} {formatarData(c.faturaAberta.vencimento)}
+                  <span className={`text-xs ${c.faturaAberta.vencimento < hojeBrasil() ? "text-negativo" : "text-suave"}`}>
+                    {c.faturaAberta.vencimento < hojeBrasil() ? "vencida" : "vence"} {formatarData(c.faturaAberta.vencimento)}
+                    {c.faturaAberta.pagoCentavos > 0 && ` · já pago ${formatarMoeda(c.faturaAberta.pagoCentavos)} de ${formatarMoeda(c.faturaAberta.totalCentavos)}`}
                   </span>
                 </>
               ) : (
@@ -273,24 +291,43 @@ function CartaoDetalhe({ c, contas, emissores }: { c: ResumoCartao; contas: { id
         <details className="mt-3">
           <summary className="cursor-pointer text-sm underline">Faturas registradas ({c.faturas.length})</summary>
           <ul className="mt-2 space-y-1 text-sm">
-            {c.faturas.map((f) => (
-              <li key={f.id} className="flex flex-wrap items-center justify-between gap-2 border-t border-borda pt-1">
-                <span>
-                  Vence {formatarData(f.vencimento)} · <Valor centavos={f.valorCentavos} />
-                  <span className="text-xs text-suave">
-                    {" "}
-                    · {STATUS[f.status ?? ""] ?? "sem valor a pagar"} · {f.origem === "manual" ? "lançada à mão" : "lida do arquivo"}
-                    {f.minimoCentavos ? ` · mínimo ${formatarMoeda(f.minimoCentavos)}` : ""}
+            {c.faturas.map((f) => {
+              const s = situacao(f);
+              return (
+                <li key={f.id} className="flex flex-wrap items-start justify-between gap-2 border-t border-borda pt-1">
+                  <span>
+                    Vence {formatarData(f.vencimento)} · <Valor centavos={f.valorCentavos} />
+                    <span className="text-xs text-suave">
+                      {" "}
+                      · <span className={s.tom}>{s.texto}</span> · {f.origem === "manual" ? "lançada à mão" : "lida do arquivo"}
+                      {f.minimoCentavos ? ` · mínimo ${formatarMoeda(f.minimoCentavos)}` : ""}
+                    </span>
+                    {f.pagamentos.length > 0 && (
+                      <span className="block text-xs text-suave">
+                        Pagamentos: {f.pagamentos.map((p) => `${formatarData(p.data)} ${formatarMoeda(p.valorCentavos)}`).join(" + ")} ({FONTE[f.pagamentos[0].fonte]})
+                      </span>
+                    )}
                   </span>
-                </span>
-                <Formulario acao={removerFatura} mensagemOk={null} retornoEmLinha className="text-xs">
-                  <input type="hidden" name="id" value={f.id} />
-                  <BotaoEnviar variante="link" pendente="removendo…" className="text-suave hover:text-negativo">
-                    remover
-                  </BotaoEnviar>
-                </Formulario>
-              </li>
-            ))}
+                  <span className="flex gap-3 text-xs">
+                    {f.status !== "paga" || f.manual ? (
+                      <Formulario acao={marcarFatura} mensagemOk={null} retornoEmLinha>
+                        <input type="hidden" name="id" value={f.id} />
+                        <input type="hidden" name="paga" value={f.manual ? "0" : "1"} />
+                        <BotaoEnviar variante="link" pendente="salvando…">
+                          {f.manual ? "desfazer “paga”" : "marcar como paga"}
+                        </BotaoEnviar>
+                      </Formulario>
+                    ) : null}
+                    <Formulario acao={removerFatura} mensagemOk={null} retornoEmLinha>
+                      <input type="hidden" name="id" value={f.id} />
+                      <BotaoEnviar variante="link" pendente="removendo…" className="text-suave hover:text-negativo">
+                        remover
+                      </BotaoEnviar>
+                    </Formulario>
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         </details>
       )}
