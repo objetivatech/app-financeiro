@@ -3,6 +3,21 @@
 Todas as mudanças relevantes do app, da mais recente para a mais antiga. O formato segue
 [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e as versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.10.0] — 2026-11-05
+
+### Adicionado
+- **Pagamento de fatura em várias vezes:** o app soma os pagamentos feitos entre um fechamento e o seguinte (no extrato
+  da conta que paga ou como crédito na própria fatura) e mostra, em cada fatura, se está paga, paga em parte (e quanto
+  falta) ou a pagar, com os pagamentos encontrados.
+- **Marcar fatura como paga** (e desfazer) em Cartões → Faturas registradas, para pagamentos fora dos extratos.
+
+### Corrigido
+- Faturas antigas apareciam como vencidas e a "fatura em aberto" era a mais antiga: agora só a mais recente pode estar
+  em aberto; a não quitada aparece como "passou para a fatura seguinte" e sai de A pagar.
+- Limite usado e "parcelado a vencer" contavam parcelas em dobro (as que já estavam na fatura do mês e a mesma compra
+  lida com descrição ou centavos diferentes em faturas diferentes).
+- "Pagamento da fatura" no extrato passa a ser reconhecido como pagamento de fatura.
+
 ## [0.9.3] — 2026-11-05
 
 ### Corrigido

@@ -57,6 +57,13 @@
       "when": 1793804514805,
       "tag": "0007_cartoes_vinculados",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793893448764,
+      "tag": "0008_fatura_paga_manual",
+      "breakpoints": true
     }
   ]
 }

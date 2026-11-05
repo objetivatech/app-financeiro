@@ -1,0 +1,1 @@
+ALTER TABLE "faturas" ADD COLUMN "paga_em" date;

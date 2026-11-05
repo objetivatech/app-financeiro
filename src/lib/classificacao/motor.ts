@@ -100,7 +100,7 @@ const HEURISTICAS: { teste: RegExp; sinal?: "entrada" | "saida"; apenasCartao?: 
     decisao: { natureza: "pagamento_fatura", categoriaId: "mov_fatura", motivo: "Pagamento da fatura recebido no cartão" },
   },
   {
-    teste: /PAGAMENTO (DE )?FATURA|PGTO FATURA|PAG FATURA|PAGTO CARTAO|PAGAMENTO CARTAO/,
+    teste: /PAGAMENTO (DE |DA )?FATURA|PGTO (DE |DA )?FATURA|PAG FATURA|PAGTO CARTAO|PAGAMENTO (DO )?CARTAO/,
     sinal: "saida",
     decisao: { natureza: "pagamento_fatura", categoriaId: "mov_fatura", motivo: "Pagamento de fatura de cartão" },
   },
