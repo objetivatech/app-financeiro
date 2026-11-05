@@ -8,6 +8,7 @@ import { atualizarAlertas } from "@/lib/consultor/alertas";
 import { obterDb } from "@/lib/db";
 import { configuracoes, regras } from "@/lib/db/schema";
 import { obterPerfilFiscal, salvarPerfilFiscal } from "@/lib/fiscal/perfil";
+import { apagarSenhasGuardadas } from "@/lib/importacao/senha-pdf";
 import { parseValorCentavos } from "@/lib/importacao/util";
 
 export async function salvarPerfil(formData: FormData): Promise<RetornoAcao> {
@@ -78,4 +79,10 @@ export async function procurarRetiradas(): Promise<{ ok: string }> {
   await atualizarAlertas(db, { atualizarCompromissos: false }).catch(() => undefined);
   for (const p of ["/", "/pf", "/pj", "/transacoes"]) revalidatePath(p);
   return { ok: n ? `${n} transação(ões) reconhecida(s) como retirada, aporte ou transferência entre contas suas.` : "Nada novo encontrado." };
+}
+
+export async function apagarSenhasPdf(): Promise<RetornoAcao> {
+  await apagarSenhasGuardadas(obterDb());
+  revalidatePath("/configuracoes");
+  return { ok: "Senhas apagadas." };
 }

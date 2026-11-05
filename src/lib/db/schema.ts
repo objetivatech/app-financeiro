@@ -174,7 +174,7 @@ export const analises = pgTable("analises", {
   criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const statusTrabalhoEnum = pgEnum("status_trabalho", ["fila", "processando", "concluido", "erro"]);
+export const statusTrabalhoEnum = pgEnum("status_trabalho", ["fila", "processando", "concluido", "erro", "senha"]);
 
 /**
  * Fila de importação: o upload só grava o arquivo aqui e responde na hora; um processo em
@@ -189,6 +189,10 @@ export const trabalhosImportacao = pgTable("trabalhos_importacao", {
   /** Apagado ao concluir, para não guardar o extrato duas vezes. */
   arquivo: bytea("arquivo"),
   status: statusTrabalhoEnum("status").notNull().default("fila"),
+  /** Senha do PDF informada por você, cifrada; apagada assim que o arquivo é lido. */
+  senha: text("senha"),
+  /** Guardar a senha (cifrada) para abrir os próximos arquivos sozinho. */
+  lembrarSenha: boolean("lembrar_senha").notNull().default(false),
   mensagem: text("mensagem"),
   resultado: jsonb("resultado"),
   criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),

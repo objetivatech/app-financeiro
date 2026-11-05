@@ -64,6 +64,13 @@
       "when": 1793893448764,
       "tag": "0008_fatura_paga_manual",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793901673293,
+      "tag": "0009_pdf_com_senha",
+      "breakpoints": true
     }
   ]
 }

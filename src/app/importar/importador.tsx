@@ -20,7 +20,8 @@ interface Item {
 const INTERVALO_MS = 3000;
 
 function terminado(item: Item): boolean {
-  return item.envio === "falhou" || item.situacao?.status === "concluido" || item.situacao?.status === "erro";
+  // "senha" também para de consultar: espera você digitar a senha.
+  return item.envio === "falhou" || ["concluido", "erro", "senha"].includes(item.situacao?.status ?? "");
 }
 
 function resumoConcluido(s: SituacaoTrabalho): string {
@@ -179,7 +180,16 @@ export function Importador({
       {itens.length > 0 && (
         <ul className="mt-4 space-y-2 text-sm">
           {itens.map((item) => (
-            <LinhaItem key={item.chave} item={item} />
+            <LinhaItem
+              key={item.chave}
+              item={item}
+              // Depois da senha (ou de descartar), volta a acompanhar este arquivo.
+              aoResponder={(status) => {
+                if (!item.situacao) return;
+                atualizar(item.chave, { situacao: { ...item.situacao, status, mensagem: status === "erro" ? "Cancelado por você." : null } });
+                if (status === "fila") setOcupada(true);
+              }}
+            />
           ))}
         </ul>
       )}
@@ -219,7 +229,62 @@ export function Importador({
   );
 }
 
-function LinhaItem({ item }: { item: Item }) {
+/** PDF protegido: pede a senha ali mesmo, com a opção de guardar para os próximos arquivos. */
+function PedirSenha({ id, mensagem, aoResponder }: { id: number; mensagem: string | null; aoResponder: (status: "fila" | "erro") => void }) {
+  const [senha, setSenha] = useState("");
+  const [lembrar, setLembrar] = useState(true);
+  const [enviando, setEnviando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  async function enviar(corpo: object, status: "fila" | "erro") {
+    setEnviando(true);
+    setErro(null);
+    try {
+      const r = await fetch("/api/importar", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, ...corpo }) });
+      const resposta = await r.json().catch(() => ({}));
+      if (!r.ok) setErro(resposta.erro ?? `Falha (HTTP ${r.status}).`);
+      else aoResponder(status);
+    } catch {
+      setErro("Sem resposta do servidor.");
+    } finally {
+      setEnviando(false);
+    }
+  }
+  return (
+    <form
+      className="mt-1 flex flex-wrap items-center gap-2 rounded-md bg-alerta/10 p-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (senha) void enviar({ senha, lembrar }, "fila");
+      }}
+    >
+      <span className="w-full text-xs">
+        🔒 {mensagem ?? "Este PDF é protegido por senha."} Digite a senha do arquivo (muitos bancos usam parte do CPF ou da data de
+        nascimento; o e-mail da fatura costuma dizer qual).
+      </span>
+      <input
+        type="password"
+        autoComplete="off"
+        value={senha}
+        onChange={(e) => setSenha(e.target.value)}
+        placeholder="Senha do PDF"
+        className={`${estiloCampo} w-44`}
+        aria-label="Senha do PDF"
+      />
+      <label className="flex items-center gap-1.5 text-xs">
+        <input type="checkbox" checked={lembrar} onChange={(e) => setLembrar(e.target.checked)} /> lembrar para os próximos arquivos
+      </label>
+      <Botao type="submit" disabled={enviando || !senha}>
+        {enviando ? "Abrindo…" : "Abrir"}
+      </Botao>
+      <button type="button" onClick={() => void enviar({ descartar: true }, "erro")} disabled={enviando} className="text-xs text-suave underline">
+        descartar
+      </button>
+      {erro && <span className="w-full text-xs text-negativo">{erro}</span>}
+    </form>
+  );
+}
+
+function LinhaItem({ item, aoResponder }: { item: Item; aoResponder: (status: "fila" | "erro") => void }) {
   const s = item.situacao;
   let rotulo = "";
   let cor = "text-suave";
@@ -233,6 +298,10 @@ function LinhaItem({ item }: { item: Item }) {
     detalhe = item.erroEnvio ?? null;
   } else if (!s || s.status === "fila") rotulo = "na fila";
   else if (s.status === "processando") rotulo = `lendo…${s.segundos ? ` ${s.segundos}s` : ""}`;
+  else if (s.status === "senha") {
+    rotulo = "precisa de senha";
+    cor = "text-alerta";
+  }
   else if (s.status === "concluido") {
     rotulo = "importado";
     cor = "text-positivo";
@@ -253,6 +322,7 @@ function LinhaItem({ item }: { item: Item }) {
         <span className={`whitespace-nowrap ${cor}`}>{rotulo}</span>
       </div>
       {detalhe && <span className="text-suave">{detalhe}</span>}
+      {s?.status === "senha" && <PedirSenha id={s.id} mensagem={s.mensagem} aoResponder={aoResponder} />}
       {avisos.length > 0 && (
         <details className="text-xs text-suave">
           <summary>{avisos.length} aviso(s)</summary>

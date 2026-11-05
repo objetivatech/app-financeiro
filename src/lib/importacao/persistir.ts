@@ -5,6 +5,7 @@ import { cartoesVinculados, contas, importacoes, titulares, transacoes } from ".
 import { registrarFatura } from "../cartoes/servico";
 import { obterInstituicao } from "../instituicoes/catalogo";
 import { lerArquivo, type OpcoesImportacao } from "./importar";
+import { senhaDoPdf, senhasGuardadas } from "./senha-pdf";
 import { ErroImportacao, type Escopo, type ExtratoNormalizado } from "./tipos";
 import { normalizarTexto } from "./util";
 
@@ -119,7 +120,13 @@ export async function importarParaBanco(
   db: Db,
   bytes: Uint8Array,
   nomeArquivo: string,
-  opcoes: OpcoesImportacao & { contaId?: number } = {},
+  opcoes: OpcoesImportacao & {
+    contaId?: number;
+    /** Senha digitada por você para este PDF. */
+    senhaInformada?: string | null;
+    /** Avisa qual senha abriu o PDF (a fila guarda se você pediu). Nunca vai para o resultado. */
+    aoAbrirComSenha?: (senha: string) => void;
+  } = {},
 ): Promise<ResultadoImportacao> {
   const hash = hashArquivo(bytes);
   const jaImportado = await db.query.importacoes.findFirst({ where: eq(importacoes.hashArquivo, hash) });
@@ -127,7 +134,11 @@ export async function importarParaBanco(
     throw new ErroImportacao(`Este arquivo já foi importado (${jaImportado.nomeArquivo}).`);
   }
 
-  const extrato = await lerArquivo(bytes, nomeArquivo, opcoes);
+  // PDF com senha: tenta a que você digitou e as guardadas; sem nenhuma, a fila pede na tela.
+  const ehPdf = Buffer.from(bytes.subarray(0, 1024)).includes("%PDF");
+  const senhaUsada = ehPdf ? await senhaDoPdf(bytes, { informada: opcoes.senhaInformada, guardadas: await senhasGuardadas(db) }) : null;
+  if (senhaUsada) opcoes.aoAbrirComSenha?.(senhaUsada);
+  const extrato = await lerArquivo(bytes, nomeArquivo, { ...opcoes, senhaPdf: senhaUsada });
   if (extrato.transacoes.length === 0) {
     throw new ErroImportacao("Nenhuma transação encontrada no arquivo.");
   }

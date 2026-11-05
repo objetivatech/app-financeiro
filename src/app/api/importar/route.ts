@@ -1,5 +1,5 @@
 import { obterDb } from "@/lib/db";
-import { cancelarFila, enfileirar, estadoFila, situacaoDosTrabalhos } from "@/lib/importacao/fila";
+import { cancelarFila, descartarTrabalho, enfileirar, estadoFila, informarSenha, situacaoDosTrabalhos } from "@/lib/importacao/fila";
 
 const TAMANHO_MAXIMO = 25 * 1024 * 1024;
 
@@ -36,4 +36,23 @@ export async function GET(request: Request) {
 export async function DELETE() {
   const cancelados = await cancelarFila(obterDb());
   return Response.json({ cancelados });
+}
+
+/**
+ * PDF que pede senha: PATCH /api/importar { id, senha, lembrar } devolve o arquivo à fila;
+ * { id, descartar: true } desiste dele. A senha não volta nas respostas nem aparece em logs.
+ */
+export async function PATCH(request: Request) {
+  const corpo = (await request.json().catch(() => ({}))) as { id?: unknown; senha?: unknown; lembrar?: unknown; descartar?: unknown };
+  const id = Number(corpo.id);
+  if (!Number.isInteger(id) || id <= 0) return Response.json({ erro: "Arquivo inválido." }, { status: 400 });
+  const db = obterDb();
+  if (corpo.descartar === true) {
+    await descartarTrabalho(db, id);
+    return Response.json({ ok: true });
+  }
+  const senha = typeof corpo.senha === "string" ? corpo.senha : "";
+  if (!senha) return Response.json({ erro: "Digite a senha." }, { status: 400 });
+  const ok = await informarSenha(db, id, senha, corpo.lembrar === true);
+  return ok ? Response.json({ ok: true }) : Response.json({ erro: "Este arquivo não está mais esperando senha. Recarregue a página." }, { status: 409 });
 }
