@@ -15,7 +15,7 @@ export interface ItemParaIa {
 
 const idsCategorias = CATEGORIAS_PADRAO.map((c) => c.id) as [string, ...string[]];
 
-const EsquemaClassificacao = z.object({
+export const EsquemaClassificacao = z.object({
   itens: z.array(
     z.object({
       id: z.number().int(),

@@ -8,7 +8,7 @@ import { ErroIa, iaDisponivel, modeloDa, obterClienteIa, opcoesDeFallback, regis
 import { atualizarAlertas, listarAlertasAtivos, montarRetrato } from "./alertas";
 import { SKILL_GESTAO_FINANCEIRA } from "./skill";
 
-const EsquemaCarta = z.object({
+export const EsquemaCarta = z.object({
   titulo: z.string().describe("Uma frase que resume a semana, ex.: 'Semana de segurar gastos: a fatura do Nubank pesa'"),
   resumo: z.string().describe("2 a 4 frases: como estão a empresa e a vida pessoal, com os números que importam"),
   prioridades: z
