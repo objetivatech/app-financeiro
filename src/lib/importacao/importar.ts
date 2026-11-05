@@ -12,6 +12,8 @@ export interface OpcoesImportacao {
   extratorIa?: typeof extrairComIa;
   /** Interrompe a leitura por IA (cancelamento da fila). */
   signal?: AbortSignal;
+  /** Senha que abre o PDF (já conferida por senhaDoPdf). */
+  senhaPdf?: string | null;
 }
 
 /**
@@ -48,7 +50,7 @@ export async function lerArquivo(
     case "pdf":
     case "imagem":
       exigirIa(`Arquivos ${formato === "pdf" ? "PDF" : "de imagem"} são lidos pela IA.`);
-      return extrator({ formato, bytes, mimeType, nomeArquivo, signal: opcoes.signal });
+      return extrator({ formato, bytes, mimeType, nomeArquivo, signal: opcoes.signal, senha: formato === "pdf" ? opcoes.senhaPdf : undefined });
     default:
       throw new ErroImportacao("Formato de arquivo não reconhecido.");
   }

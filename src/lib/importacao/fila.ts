@@ -1,4 +1,4 @@
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { classificarPendentes } from "../classificacao/executar";
 import { atualizarCompromissos } from "../compromissos/servico";
 import { atualizarAlertas } from "../consultor/alertas";
@@ -6,6 +6,7 @@ import type { Db } from "../db";
 import { trabalhosImportacao, type TrabalhoImportacao } from "../db/schema";
 import { ErroIa } from "../ia/cliente";
 import { importarParaBanco, type ResultadoImportacao } from "./persistir";
+import { cifrar, decifrar, ErroSenhaPdf, guardarSenha } from "./senha-pdf";
 import { ErroImportacao } from "./tipos";
 
 /**
@@ -62,13 +63,35 @@ const MENSAGEM_CANCELADO = "Cancelado por você.";
 export async function cancelarFila(db: Db): Promise<number> {
   const cancelados = await db
     .update(trabalhosImportacao)
-    .set({ status: "erro", mensagem: MENSAGEM_CANCELADO, arquivo: null, concluidoEm: new Date() })
-    .where(eq(trabalhosImportacao.status, "fila"))
+    .set({ status: "erro", mensagem: MENSAGEM_CANCELADO, arquivo: null, senha: null, concluidoEm: new Date() })
+    .where(inArray(trabalhosImportacao.status, ["fila", "senha"]))
     .returning({ id: trabalhosImportacao.id });
   const emAndamento = fila.atual;
   if (fila.ativa) fila.cancelada = true;
   emAndamento?.abort();
   return cancelados.length + (emAndamento ? 1 : 0);
+}
+
+/**
+ * Você digitou a senha de um PDF que a pediu: volta para a fila com a senha (cifrada).
+ * `lembrar` guarda a senha para abrir os próximos arquivos sozinho, se ela funcionar.
+ */
+export async function informarSenha(db: Db, id: number, senha: string, lembrar: boolean): Promise<boolean> {
+  const r = await db
+    .update(trabalhosImportacao)
+    .set({ status: "fila", senha: cifrar(senha.slice(0, 200)), lembrarSenha: lembrar, mensagem: null, concluidoEm: null })
+    .where(and(eq(trabalhosImportacao.id, id), eq(trabalhosImportacao.status, "senha")))
+    .returning({ id: trabalhosImportacao.id });
+  if (r.length) dispararFila(db);
+  return r.length > 0;
+}
+
+/** Desiste de um PDF que pede senha. */
+export async function descartarTrabalho(db: Db, id: number): Promise<void> {
+  await db
+    .update(trabalhosImportacao)
+    .set({ status: "erro", mensagem: MENSAGEM_CANCELADO, arquivo: null, senha: null, concluidoEm: new Date() })
+    .where(and(eq(trabalhosImportacao.id, id), eq(trabalhosImportacao.status, "senha")));
 }
 
 /** Na subida do servidor: o que estava "processando" foi interrompido; volta para a fila. */
@@ -132,16 +155,30 @@ async function processarUm(db: Db, trabalho: TrabalhoImportacao): Promise<void> 
   fila.atual = controle;
   try {
     if (!trabalho.arquivo) throw new ErroImportacao("Arquivo não encontrado na fila.");
+    const senhaInformada = trabalho.senha ? decifrar(trabalho.senha) : null;
+    let senhaQueAbriu: string | null = null;
     const resultado: ResultadoImportacao = await importarParaBanco(db, new Uint8Array(trabalho.arquivo), trabalho.nomeArquivo, {
       contaId: trabalho.contaId ?? undefined,
       signal: controle.signal,
+      senhaInformada,
+      aoAbrirComSenha: (s) => (senhaQueAbriu = s),
     });
+    // Guarda só a senha que você digitou e que de fato abriu o arquivo.
+    if (trabalho.lembrarSenha && senhaInformada && senhaQueAbriu === senhaInformada) await guardarSenha(db, senhaInformada);
     await db
       .update(trabalhosImportacao)
-      .set({ status: "concluido", resultado, arquivo: null, concluidoEm: new Date(), mensagem: null })
+      .set({ status: "concluido", resultado, arquivo: null, senha: null, concluidoEm: new Date(), mensagem: null })
       .where(eq(trabalhosImportacao.id, trabalho.id));
     console.log(`Importado ${trabalho.nomeArquivo}: ${resultado.novas} novas em ${Math.round((Date.now() - inicio) / 1000)}s`);
   } catch (erroOriginal) {
+    if (erroOriginal instanceof ErroSenhaPdf) {
+      // Mantém o arquivo e espera você digitar a senha na tela de Importar.
+      await db
+        .update(trabalhosImportacao)
+        .set({ status: "senha", senha: null, mensagem: erroOriginal.message, concluidoEm: new Date() })
+        .where(eq(trabalhosImportacao.id, trabalho.id));
+      return;
+    }
     // Cancelamento pelo usuário: a chamada à IA aborta com um erro genérico; mostramos a mensagem certa.
     const erro = controle.signal.aborted ? new ErroImportacao(MENSAGEM_CANCELADO) : erroOriginal;
     const conhecido = erro instanceof ErroImportacao || erro instanceof ErroIa;
@@ -152,6 +189,7 @@ async function processarUm(db: Db, trabalho: TrabalhoImportacao): Promise<void> 
         status: "erro",
         // Mantém o arquivo em caso de erro inesperado, para poder tentar de novo.
         arquivo: conhecido ? null : trabalho.arquivo,
+        senha: null,
         concluidoEm: new Date(),
         mensagem: conhecido
           ? (erro as Error).message
@@ -202,7 +240,7 @@ export async function trabalhosRecentes(db: Db): Promise<number[]> {
     .select({ id: trabalhosImportacao.id })
     .from(trabalhosImportacao)
     .where(
-      sql`${trabalhosImportacao.status} in ('fila','processando') or ${trabalhosImportacao.concluidoEm} > now() - interval '30 minutes'`,
+      sql`${trabalhosImportacao.status} in ('fila','processando','senha') or ${trabalhosImportacao.concluidoEm} > now() - interval '30 minutes'`,
     )
     .orderBy(trabalhosImportacao.id);
   return linhas.map((l) => l.id);

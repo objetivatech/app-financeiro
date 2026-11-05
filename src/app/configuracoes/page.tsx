@@ -1,4 +1,5 @@
 import { BotaoEnviar, Formulario } from "@/components/formulario";
+import { senhasGuardadas } from "@/lib/importacao/senha-pdf";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { Cartao, Carregando, estiloCampo, SeloEscopo } from "@/components/ui";
@@ -11,7 +12,7 @@ import { custosDoMes } from "@/lib/ia/custos";
 import { LinkAjuda } from "@/components/link-ajuda";
 import { meiAte, obterPerfilFiscal } from "@/lib/fiscal/perfil";
 import { BotaoRetiradas } from "./botao-retiradas";
-import { excluirRegra, salvarDadosFiscais, salvarPerfil } from "./acoes";
+import { excluirRegra, salvarDadosFiscais, salvarPerfil, apagarSenhasPdf } from "./acoes";
 
 const EXEMPLO_PERFIL = `Ex.: Sou sócio único de uma agência de marketing digital (Simples Nacional, Anexo III).
 Faturamento médio de R$ 40 mil/mês. Tiro pró-labore de R$ 3.000 todo dia 5 e distribuo lucros quando sobra.
@@ -32,10 +33,11 @@ export default function PaginaConfiguracoes() {
 async function Conteudo() {
   await connection();
   const db = obterDb();
-  const [perfil, listaRegras, fiscal] = await Promise.all([
+  const [perfil, listaRegras, fiscal, senhasPdf] = await Promise.all([
     obterPerfil(db),
     db.query.regras.findMany({ orderBy: (r, { desc }) => [desc(r.id)] }),
     obterPerfilFiscal(db),
+    senhasGuardadas(db),
   ]);
   const custos = await custosDoMes(db);
   const custoTotal = custos.reduce((t, c) => t + c.custoUsd, 0);
@@ -163,6 +165,23 @@ async function Conteudo() {
           descrição/data/valor das transações (para classificar) e totais agregados (para as dicas). CPF/CNPJ não são
           enviados na classificação nem nas dicas.
         </p>
+      </Cartao>
+
+      <Cartao titulo={<>Senhas de PDF <LinkAjuda secao="pdf-senha" /></>}>
+        <div id="senhas-pdf" className="flex flex-wrap items-center justify-between gap-3 text-sm">
+          <p className="text-suave">
+            {senhasPdf.length
+              ? `${senhasPdf.length} senha(s) guardada(s), cifradas. O app as tenta sozinho quando um PDF pede senha.`
+              : "Nenhuma senha guardada. Quando um PDF pedir senha, o Importar pergunta e você escolhe se quer guardar."}
+          </p>
+          {senhasPdf.length > 0 && (
+            <Formulario acao={apagarSenhasPdf} mensagemOk="Senhas apagadas." retornoEmLinha className="flex items-center gap-2">
+              <BotaoEnviar variante="link" pendente="apagando…" className="text-negativo">
+                apagar senhas guardadas
+              </BotaoEnviar>
+            </Formulario>
+          )}
+        </div>
       </Cartao>
 
       <Cartao titulo={`Regras aprendidas (${listaRegras.length})`}>

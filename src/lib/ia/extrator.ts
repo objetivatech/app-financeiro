@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 import { INSTITUICOES, instituicaoPorTexto } from "../instituicoes/catalogo";
-import type { ExtratoNormalizado, FormatoArquivo } from "../importacao/tipos";
+import { ErroImportacao, type ExtratoNormalizado, type FormatoArquivo } from "../importacao/tipos";
 import { parseData } from "../importacao/util";
 import { ErroIa, modeloDa, obterClienteIa, opcoesDeFallback, registrarUso } from "./cliente";
 
@@ -67,6 +67,8 @@ export interface EntradaExtracao {
   nomeArquivo: string;
   /** Para CSV: o texto já decodificado. */
   texto?: string;
+  /** Senha do PDF protegido (o arquivo é aberto aqui no servidor; a senha não vai para a IA). */
+  senha?: string | null;
   /** Permite interromper a leitura no meio (botão "Cancelar fila"). */
   signal?: AbortSignal;
 }
@@ -76,10 +78,10 @@ export interface EntradaExtracao {
  * Mandar só o texto custa uma fração de mandar o PDF inteiro, que vai com a imagem de cada página.
  * PDF escaneado (sem texto) volta null e segue como documento.
  */
-export async function textoDoPdf(bytes: Uint8Array): Promise<string | null> {
+export async function textoDoPdf(bytes: Uint8Array, senha?: string | null): Promise<string | null> {
   try {
     const { extractText, getDocumentProxy } = await import("unpdf");
-    const pdf = await getDocumentProxy(new Uint8Array(bytes));
+    const pdf = await getDocumentProxy(new Uint8Array(bytes), senha ? { password: senha } : {});
     const { text } = await extractText(pdf, { mergePages: false });
     const paginas = (Array.isArray(text) ? text : [text]).map((t, i) => `--- Página ${i + 1} ---\n${t.trim()}`);
     const tudo = paginas.join("\n\n");
@@ -93,9 +95,15 @@ export async function textoDoPdf(bytes: Uint8Array): Promise<string | null> {
 
 async function blocoDocumento(entrada: EntradaExtracao): Promise<{ bloco: Anthropic.Beta.BetaContentBlockParam; comoTexto: boolean }> {
   if (entrada.formato === "pdf") {
-    const texto = await textoDoPdf(entrada.bytes);
+    const texto = await textoDoPdf(entrada.bytes, entrada.senha);
     if (texto) {
       return { bloco: { type: "text", text: `Texto extraído do PDF "${entrada.nomeArquivo}":\n\n${texto}` }, comoTexto: true };
+    }
+    if (entrada.senha) {
+      // O PDF protegido não pode ir inteiro para a IA (ela não tem a senha) e este não tem texto.
+      throw new ErroImportacao(
+        "PDF com senha e escaneado (sem texto): abra-o no seu computador, salve uma cópia sem senha (Imprimir → Salvar como PDF) e envie a cópia.",
+      );
     }
     const base64 = Buffer.from(entrada.bytes).toString("base64");
     return { bloco: { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } }, comoTexto: false };

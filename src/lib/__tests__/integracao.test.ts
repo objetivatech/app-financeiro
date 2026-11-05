@@ -22,7 +22,8 @@ import { salvarPerfilFiscal } from "../fiscal/perfil";
 import { deslocarMes as deslocarMesTeste } from "../formato";
 import { sincronizarAsaas } from "../integracoes/asaas/sincronizar";
 import { sincronizarMercadoPago } from "../integracoes/mercadopago/sincronizar";
-import { cancelarFila, enfileirar, estadoFila, retomarFila, situacaoDosTrabalhos } from "../importacao/fila";
+import { cancelarFila, enfileirar, estadoFila, informarSenha, retomarFila, situacaoDosTrabalhos } from "../importacao/fila";
+import { senhasGuardadas } from "../importacao/senha-pdf";
 import { gravarExtrato, importarParaBanco, registrarFinaisDaFatura } from "../importacao/persistir";
 import { somarMeses } from "../cartoes/calculo";
 import { marcarFaturaPaga, registrarFatura, resumoCartoes } from "../cartoes/servico";
@@ -154,6 +155,82 @@ describe.skipIf(!url)("importação + classificação no banco", () => {
       delete process.env.ANTHROPIC_API_KEY;
       delete process.env.ANTHROPIC_BASE_URL;
       servidor.closeAllConnections();
+      servidor.close();
+    }
+  });
+
+  it("fila: PDF com senha é pedido na tela, a senha não vai para a IA e, guardada, abre o próximo sozinho", async () => {
+    const esperarFila = async () => {
+      for (let i = 0; i < 200 && estadoFila().ocupada; i++) await new Promise((r) => setTimeout(r, 50));
+    };
+    const corpos: string[] = [];
+    const leitura = {
+      instituicao_nome: "Banco Exemplo", instituicao_id: "", tipo_conta: "corrente", titular: "", documento_titular: "", agencia: "",
+      numero_conta: "777-1", final_cartao: "", periodo_inicio: "2026-10-01", periodo_fim: "2026-10-31", saldo_final: null, moeda: "BRL",
+      fatura_vencimento: "", fatura_fechamento: "", fatura_total: null, fatura_minimo: null,
+      transacoes: [{ data: "2026-10-05", descricao: "PIX TESTE SENHA", valor: -12.34, nome_contraparte: "", documento_contraparte: "", parcela_atual: null, final_cartao: "", parcela_total: null }],
+      observacoes: "",
+    };
+    const servidor = createServer((req, res) => {
+      let corpo = "";
+      req.on("data", (c) => (corpo += c));
+      req.on("end", () => {
+        // Só os pedidos de leitura de arquivo interessam (a classificação do lote também chama a IA).
+        if (/Texto extraído do PDF|application\/pdf/.test(corpo)) corpos.push(corpo);
+        const texto = JSON.stringify(leitura);
+        if (JSON.parse(corpo || "{}").stream) {
+          const ev = (e: { type: string }) => `event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`;
+          res.writeHead(200, { "content-type": "text/event-stream" });
+          res.end(
+            [
+              { type: "message_start", message: { id: "msg_1", type: "message", role: "assistant", model: "claude-haiku-5-5", content: [], stop_reason: null, usage: { input_tokens: 10, output_tokens: 0 } } },
+              { type: "content_block_start", index: 0, content_block: { type: "text", text: "" } },
+              { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: texto } },
+              { type: "content_block_stop", index: 0 },
+              { type: "message_delta", delta: { stop_reason: "end_turn" }, usage: { output_tokens: 10 } },
+              { type: "message_stop" },
+            ]
+              .map(ev)
+              .join(""),
+          );
+          return;
+        }
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ id: "msg_1", type: "message", role: "assistant", model: "claude-haiku-5-5", content: [{ type: "text", text: texto }], stop_reason: "end_turn", usage: { input_tokens: 10, output_tokens: 10 } }));
+      });
+    });
+    await new Promise<void>((r) => servidor.listen(0, "127.0.0.1", r));
+    process.env.ANTHROPIC_API_KEY = "teste";
+    process.env.ANTHROPIC_BASE_URL = `http://127.0.0.1:${(servidor.address() as { port: number }).port}`;
+    redefinirClienteIa();
+    try {
+      const id = await enfileirar(db, fixture("extrato-com-senha.pdf"), "fatura-com-senha.pdf");
+      await esperarFila();
+      expect((await situacaoDosTrabalhos(db, [id]))[0]).toMatchObject({ status: "senha", mensagem: expect.stringMatching(/protegido por senha/) });
+      expect(corpos).toHaveLength(0); // o arquivo não foi para a IA
+
+      expect(await informarSenha(db, id, "errada", true)).toBe(true);
+      await esperarFila();
+      expect((await situacaoDosTrabalhos(db, [id]))[0]).toMatchObject({ status: "senha", mensagem: expect.stringMatching(/incorreta/) });
+
+      await informarSenha(db, id, "s3nh@-teste", true);
+      await esperarFila();
+      expect((await situacaoDosTrabalhos(db, [id]))[0]).toMatchObject({ status: "concluido", resultado: expect.objectContaining({ novas: 1 }) });
+      expect(corpos.length).toBeGreaterThan(0);
+      expect(corpos.join("")).toContain("Extrato Banco Exemplo"); // foi o texto, aberto no servidor
+      expect(corpos.join("")).not.toContain("s3nh@-teste");
+      const linha = await db.query.trabalhosImportacao.findFirst({ where: (t, { eq }) => eq(t.id, id) });
+      expect(linha).toMatchObject({ senha: null, arquivo: null });
+      expect(await senhasGuardadas(db)).toEqual(["s3nh@-teste"]);
+
+      // Outro arquivo com a mesma senha: abre sozinho, sem perguntar.
+      const outro = await enfileirar(db, fixture("extrato-com-senha-2.pdf"), "outra-fatura.pdf");
+      await esperarFila();
+      expect((await situacaoDosTrabalhos(db, [outro]))[0].status).toBe("concluido");
+    } finally {
+      delete process.env.ANTHROPIC_API_KEY;
+      delete process.env.ANTHROPIC_BASE_URL;
+      redefinirClienteIa();
       servidor.close();
     }
   });

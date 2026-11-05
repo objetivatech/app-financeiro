@@ -482,6 +482,22 @@ Para contas que não têm integração: arraste extratos e faturas (OFX, CSV, PD
 - **Faturas de cartão:** além das compras, o app lê vencimento, total e mínimo e lança a fatura em A pagar. Parcelas
   ("3/10") de faturas de meses diferentes não são confundidas com duplicatas, mesmo repetindo a data da compra.
 
+<a id="pdf-senha"></a>
+
+**PDF com senha** (faturas de alguns bancos)
+
+- Não precisa fazer nada antes de enviar: o app percebe que o arquivo tem senha e o item mostra **"precisa de senha"**,
+  com um campo para digitá-la. Os outros arquivos continuam sendo lidos enquanto isso.
+- Marque **lembrar para os próximos arquivos** (vem marcado): a senha é guardada **cifrada** e, nos próximos PDFs, o
+  app tenta as senhas guardadas sozinho e só pergunta se nenhuma servir. Ela só é guardada se de fato abriu o arquivo.
+- Senha errada: o app avisa e pergunta de novo. **descartar** desiste daquele arquivo.
+- O PDF é aberto no próprio servidor e **só o texto vai para a IA** — a senha nunca. A senha digitada fica no banco
+  só até o arquivo ser lido.
+- Exceção: PDF com senha **e escaneado** (sem texto) não dá para ler assim. Abra no computador, salve uma cópia sem
+  senha (Imprimir → Salvar como PDF) e envie a cópia.
+- As senhas guardadas aparecem (só a quantidade) em [Configurações](#configuracoes) → **Senhas de PDF**, com o botão
+  para apagar todas.
+
 > **Asaas e Mercado Pago:** depois de conectar a integração, **não importe mais extratos deles por arquivo** — o extrato
 > chega sozinho. O **Relatório de Liberações** do Mercado Pago (CSV) é reconhecido no Importar, para quem não conectou.
 

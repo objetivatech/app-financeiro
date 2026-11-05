@@ -3,6 +3,13 @@
 Todas as mudanças relevantes do app, da mais recente para a mais antiga. O formato segue
 [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e as versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.11.0] — 2026-11-05
+
+### Adicionado
+- **PDF com senha:** ao importar uma fatura protegida, o item mostra "precisa de senha" com um campo para digitá-la
+  (os outros arquivos seguem). A senha pode ser **guardada cifrada** para abrir os próximos arquivos sozinho; a lista
+  se apaga em Configurações → Senhas de PDF. O PDF é aberto no servidor e só o texto vai para a IA (a senha nunca).
+
 ## [0.10.0] — 2026-11-05
 
 ### Adicionado
