@@ -689,7 +689,8 @@ describe.skipIf(!url)("importação + classificação no banco", () => {
     const f = await indicadoresFiscais(db);
     expect(f.regimeAtual).toBe("simples");
     expect(f.mesesDeFolha).toBe(2);
-    expect(f.diagnostico.folha12Centavos).toBe(900_000);
+    // Com 2 meses de folha, o Fator R usa a média × 12 (como o PGDAS-D apurou o DAS real de set/2026).
+    expect(f.diagnostico.folha12Centavos).toBe(450_000 * 12);
     expect(f.folhaCompletaEm).toBe(deslocarMesTeste(hojeBrasil().slice(0, 7), 10));
 
     // 3) Finais diferentes na fatura viram cartões virtuais do mesmo cartão.

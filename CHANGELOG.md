@@ -3,6 +3,13 @@
 Todas as mudanças relevantes do app, da mais recente para a mais antiga. O formato segue
 [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e as versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.12.1] — 2026-11-06
+
+### Corrigido
+- **Fator R logo depois de sair do MEI:** com menos de 12 meses de pró-labore, a folha passa a ser a média dos meses com
+  folha × 12 (no primeiro mês, a do próprio mês × 12), como o PGDAS-D apurou o DAS real de set/2026 (Anexo III, 6%,
+  R$ 458,32). Antes o app somava só os meses com pró-labore, caía no Anexo V e superestimava o DAS em cerca de 2,5×.
+
 ## [0.12.0] — 2026-11-05
 
 ### Adicionado

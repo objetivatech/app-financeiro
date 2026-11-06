@@ -75,10 +75,10 @@ async function Conteudo() {
           </p>
           {ind.folhaCompletaEm && (
             <p className="mt-1 text-suave">
-              A folha do Fator R tem pró-labore em {ind.mesesDeFolha} dos últimos 12 meses (MEI não tem pró-labore), por isso o Fator R
-              está mais baixo agora. Com o pró-labore atual nos 12 meses — a partir de {formatarMes(ind.folhaCompletaEm)} — ele seria{" "}
+              A folha tem pró-labore em {ind.mesesDeFolha} dos últimos 12 meses (MEI não tem pró-labore). Até completar 12 meses — em{" "}
+              {formatarMes(ind.folhaCompletaEm)} — o Fator R usa a média mensal da folha × 12 (no primeiro mês, a folha do próprio mês ×
+              12), como o PGDAS-D apurou o seu DAS de set/2026 (Anexo III). Com o pró-labore atual, isso dá{" "}
               <strong className="text-foreground">{pct(ind.fatorRPleno)}</strong>. A receita do período MEI entra na RBT12 (mesmo CNPJ).
-              Confirme com a contabilidade como o PGDAS-D está tratando esses meses.
             </p>
           )}
         </div>
@@ -105,7 +105,7 @@ async function Conteudo() {
             {d.fatorR >= LIMITE_FATOR_R ? "acima de 28%: tributa pelo Anexo III" : "abaixo de 28%: tributa pelo Anexo V (mais caro)"}
           </div>
           <dl className="mt-3 grid grid-cols-2 gap-1 text-sm">
-            <dt className="text-suave">Folha 12 meses ({ind.mesesDeFolha === 12 ? "pró-labore × 12" : `pró-labore × ${ind.mesesDeFolha} meses`})</dt>
+            <dt className="text-suave">Folha 12 meses ({ind.mesesDeFolha === 12 ? "pró-labore × 12" : `média de ${Math.max(ind.mesesDeFolha, 1)} mês(es) × 12`})</dt>
             <dd className="text-right"><Valor centavos={d.folha12Centavos} /></dd>
             <dt className="text-suave">Receita 12 meses (RBT12)</dt>
             <dd className="text-right"><Valor centavos={d.rbt12Centavos} /></dd>

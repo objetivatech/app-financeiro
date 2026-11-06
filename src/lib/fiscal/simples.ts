@@ -53,6 +53,19 @@ export function aliquotaEfetiva(anexo: AnexoServico, rbt12Centavos: number): num
   return (rbt12Centavos * faixa.aliquota - faixa.deduzir) / rbt12Centavos;
 }
 
+/**
+ * Folha de 12 meses usada no Fator R. Com os 12 meses anteriores completos, é a soma deles. Com
+ * menos (início de atividade, inclusive quem acabou de sair do MEI, que não tem pró-labore), vale a
+ * média dos meses com folha × 12; e, no primeiro mês de folha, a do próprio mês × 12. Foi assim que o
+ * PGDAS-D apurou set/2026 da empresa (Anexo III com só um mês de pró-labore).
+ */
+export function folhaDoFatorR(folhasAnteriores: number[], folhaDoMesCentavos: number): number {
+  const comFolha = folhasAnteriores.filter((f) => f > 0);
+  if (comFolha.length >= 12) return comFolha.reduce((t, f) => t + f, 0);
+  if (comFolha.length > 0) return Math.round((comFolha.reduce((t, f) => t + f, 0) / comFolha.length) * 12);
+  return folhaDoMesCentavos * 12;
+}
+
 export function fatorR(folha12Centavos: number, rbt12Centavos: number): number {
   if (rbt12Centavos <= 0) return 0;
   return folha12Centavos / rbt12Centavos;

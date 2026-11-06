@@ -6,6 +6,7 @@ import { compromissos, notasFiscais, recorrencias, transacoes } from "../db/sche
 import { apurarCompetencia, deslocarCompetencia, type ApuracaoCompetencia } from "./apuracao";
 import { inicioDaFolha, receitaPorMes } from "./indicadores";
 import { obterPerfilFiscal, regimeNoMes } from "./perfil";
+import { folhaDoFatorR } from "./simples";
 
 export interface ImpostoDaCompetencia extends ApuracaoCompetencia {
   /** Pagamentos já feitos (conta a pagar conciliada com o extrato). */
@@ -67,7 +68,10 @@ export async function impostosPorCompetencia(db: Db, meses = 6): Promise<Imposto
       receitaIssRetidoCentavos: Number(n?.issRetido ?? 0),
       quantidadeNotas: n?.quantidade ?? 0,
       rbt12Centavos: anteriores.reduce((t, m) => t + (receita.get(m) ?? 0), 0),
-      folha12Centavos: anteriores.filter(temFolha).length * perfil.proLaboreMensalCentavos,
+      folha12Centavos: folhaDoFatorR(
+        anteriores.map((m) => (temFolha(m) ? perfil.proLaboreMensalCentavos : 0)),
+        temFolha(competencia) ? perfil.proLaboreMensalCentavos : 0,
+      ),
       proLaboreCentavos: temFolha(competencia) ? perfil.proLaboreMensalCentavos : 0,
       sujeitoFatorR: perfil.sujeitoFatorR,
     });

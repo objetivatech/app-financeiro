@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { apurarCompetencia, vencimentoDoImposto } from "../apuracao";
+import { folhaDoFatorR } from "../simples";
 import { casarPagamentos } from "../../compromissos/calculo";
 import { PADRAO_DAS } from "../impostos-a-pagar";
 import { NOME_TIPO_TAXA, tipoDaTaxa } from "../../taxas";
@@ -64,5 +65,26 @@ describe("taxas do Asaas por tipo", () => {
   ])("%s → %s", (descricao, tipo) => {
     expect(tipoDaTaxa(descricao)).toBe(tipo);
     expect(NOME_TIPO_TAXA[tipoDaTaxa(descricao)]).toBeTruthy();
+  });
+});
+
+describe("Fator R de quem acabou de sair do MEI (guia real de set/2026)", () => {
+  it("folha dos 12 meses: soma; com menos meses, média × 12; no primeiro mês, a do próprio mês × 12", () => {
+    expect(folhaDoFatorR(Array(12).fill(450_000), 450_000)).toBe(5_400_000);
+    expect(folhaDoFatorR([...Array(10).fill(0), 450_000, 450_000], 450_000)).toBe(5_400_000);
+    expect(folhaDoFatorR(Array(12).fill(0), 450_000)).toBe(5_400_000);
+    expect(folhaDoFatorR(Array(12).fill(0), 0)).toBe(0);
+  });
+
+  it("set/2026: 1º mês com pró-labore de R$ 4.500 → Anexo III, 6% → DAS de R$ 458,32 (igual à guia)", () => {
+    const a = apurarCompetencia({
+      ...base,
+      competencia: "2026-09",
+      receitaCentavos: 763_867,
+      rbt12Centavos: 11_000_000,
+      folha12Centavos: folhaDoFatorR(Array(12).fill(0), 450_000),
+      proLaboreCentavos: 450_000,
+    });
+    expect(a).toMatchObject({ anexo: "III", dasCentavos: 45_832, inssCentavos: 49_500, vencimento: "2026-10-20" });
   });
 });
