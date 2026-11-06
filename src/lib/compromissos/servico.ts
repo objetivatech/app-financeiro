@@ -2,6 +2,7 @@ import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, ne, notInArra
 import { hojeBrasil, somarDias } from "../datas";
 import type { Db } from "../db";
 import { conciliarFaturas, previsaoCartoesParaFluxo } from "../cartoes/servico";
+import { atualizarImpostosAPagar, PADRAO_DAS, PADRAO_INSS } from "../fiscal/impostos-a-pagar";
 import { compromissos, contas, dividas, faturas, importacoes, integracoes, recorrencias, transacoes } from "../db/schema";
 import { casarPagamentos, PADRAO_GUIA_IMPOSTO, taxaMensal, vencimentosMensais, type ParcelaPlanejada } from "./calculo";
 
@@ -146,6 +147,8 @@ function mesesAFrente(hoje: string, quantos: number): string[] {
 export async function atualizarCompromissos(db: Db): Promise<{ gerados: number; conciliados: number }> {
   const hoje = hojeBrasil();
   let gerados = 0;
+  // DAS e INSS estimados pelas notas (vencem dia 20).
+  await atualizarImpostosAPagar(db).catch((erro) => console.error("Falha ao estimar impostos a pagar", erro));
 
   const ativas = await db.query.recorrencias.findMany({ where: eq(recorrencias.ativa, true) });
   for (const r of ativas) {
@@ -189,6 +192,8 @@ export async function atualizarCompromissos(db: Db): Promise<{ gerados: number; 
       categoriaId: compromissos.categoriaId,
       escopo: compromissos.escopo,
       tipoDivida: dividas.tipo,
+      origem: compromissos.origem,
+      idExterno: compromissos.idExterno,
     })
     .from(compromissos)
     .leftJoin(recorrencias, eq(recorrencias.id, compromissos.recorrenciaId))
@@ -222,7 +227,16 @@ export async function atualizarCompromissos(db: Db): Promise<{ gerados: number; 
         ...p,
         padraoExtrato: p.padraoExtrato ? p.padraoExtrato.toUpperCase() : null,
         // Parcelamento de imposto: o valor real (com Selic) difere um pouco do estimado.
-        padraoRegex: p.tipoDivida === "parcelamento_imposto" ? PADRAO_GUIA_IMPOSTO : null,
+        padraoRegex:
+          p.tipoDivida === "parcelamento_imposto"
+            ? PADRAO_GUIA_IMPOSTO
+            : p.origem === "imposto"
+              ? p.idExterno?.startsWith("das:")
+                ? PADRAO_DAS
+                : PADRAO_INSS
+              : null,
+        // DAS e INSS são estimados: o valor real (PGDAS-D) pode diferir bem mais que 5%.
+        tolerancia: p.origem === "imposto" ? 0.3 : undefined,
       })),
       candidatas,
     );

@@ -349,6 +349,8 @@ export const notasFiscais = pgTable(
     dataEmissao: date("data_emissao").notNull(),
     codigoServico: text("codigo_servico"),
     descricaoServico: text("descricao_servico"),
+    /** O cliente reteve o ISS (a parte do ISS sai do DAS). */
+    issRetido: boolean("iss_retido").notNull().default(false),
     pdfUrl: text("pdf_url"),
     atualizadoEm: timestamp("atualizado_em", { withTimezone: true }).notNull().defaultNow(),
   },

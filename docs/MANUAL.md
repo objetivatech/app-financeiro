@@ -442,6 +442,29 @@ contabilidade; esta tela serve para planejar.
 - **Alíquota efetiva** = (RBT12 × alíquota nominal − parcela a deduzir) ÷ RBT12, pelas tabelas da LC 123/2006.
 - **DAS estimado do mês** = receita do mês até agora × alíquota efetiva.
 
+<a id="impostos-a-pagar"></a>
+
+### Impostos a pagar (dia 20)
+
+Você paga no mês seguinte o imposto das notas de cada mês (**competência**): as notas de outubro viram o DAS e o INSS
+que vencem em **20 de novembro**. O quadro do topo mostra:
+
+- **Próximo vencimento:** o total da competência passada (DAS + INSS) e a data. Se o dia 20 cai em fim de semana ou
+  feriado nacional, o vencimento é antecipado para o dia útil anterior (ex.: 20/11 é feriado → 19/11).
+- **Já acumulado:** o imposto do mês em andamento, que cresce a cada nota emitida (vence no dia 20 do mês seguinte).
+- **Competência a competência** (6 meses): receita das notas autorizadas e quantas são, anexo e alíquota efetiva
+  daquele mês (RBT12 dos 12 meses anteriores e Fator R daquele mês), DAS, INSS, total, vencimento e situação.
+- **DAS** = receita do mês × alíquota efetiva. Nas notas em que o **cliente reteve o ISS** (informação que vem do
+  Asaas), a parte do ISS sai do DAS, porque já foi recolhida.
+- **INSS** = 11% do pró-labore (a contribuição patronal já está dentro do DAS nos Anexos III e V). Nos meses de MEI
+  não há pró-labore, e o DAS é o valor fixo do boleto do MEI.
+- **Situação:** quando a guia aparece no extrato (DAS, Simples, DARF, DCTFWeb, GPS…), a conta dá baixa e o valor real
+  substitui a estimativa; a tela mostra a diferença, para você conferir o cálculo com o PGDAS-D.
+
+O DAS e o INSS das competências passada e atual entram sozinhos em [A pagar](#pagar) e no [Fluxo de caixa](#fluxo).
+Se você já tinha cadastrado o DAS ou o INSS como **conta fixa**, o app não lança a estimativa daquele imposto (para
+não contar em dobro) e avisa: encerre a conta fixa em A pagar para usar o cálculo pelas notas.
+
 ### Os três quadros
 
 - **Fator R:** o percentual atual e se está acima ou abaixo de 28%.
@@ -464,6 +487,21 @@ Se a empresa foi MEI (informe **Foi MEI até** em [Configurações](#configuraco
   existem, quando completa 12 e qual será o Fator R com o pró-labore atual nos 12 meses.
 - Nos meses de MEI o DAS é o valor fixo do MEI, não o percentual do Simples.
 - Esta é uma estimativa para planejar: **confirme com a contabilidade** como o PGDAS-D está tratando os meses de MEI.
+
+<a id="taxas"></a>
+
+## Taxas e tarifas
+
+O quanto o Asaas e os bancos da empresa cobram, somado do extrato (no Asaas, cada taxa é um lançamento próprio).
+
+- **Resumo:** total dos últimos 12 meses, média mensal, o mês atual e o **peso na receita** (taxas ÷ receita bruta).
+- **Por tipo:** notificações (SMS, WhatsApp, e-mail, voz, Correios), Pix, boletos, cartão, notas fiscais,
+  transferências, antecipação, Serasa, mensalidade/plano e outras — com quantidade, valor médio e total. O tipo vem da
+  descrição da taxa no extrato.
+- **Mês a mês:** a mesma divisão por mês. Clique num tipo ou num mês para ver cada lançamento.
+- **Conferência:** a diferença entre o valor cobrado e o líquido das cobranças recebidas no Asaas, que deve ficar perto
+  das taxas de Pix, boleto e cartão (as de notificação e nota fiscal são cobradas à parte).
+- Estornos de taxa entram abatendo o total. Juros de empréstimo ficam de fora (não são taxa de serviço).
 
 <a id="importar"></a>
 

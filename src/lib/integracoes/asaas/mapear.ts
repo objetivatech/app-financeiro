@@ -80,6 +80,7 @@ export function notaDoAsaas(n: AsaasNota) {
     dataEmissao: emissao,
     codigoServico: n.municipalServiceCode ?? null,
     descricaoServico: n.serviceDescription ?? null,
+    issRetido: n.taxes?.retainIss === true,
     pdfUrl: n.pdfUrl ?? null,
   };
 }

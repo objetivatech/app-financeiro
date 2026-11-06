@@ -33,7 +33,10 @@ export const GRUPOS_MENU = [
   },
   {
     titulo: "Empresa",
-    links: [{ href: "/impostos", rotulo: "Impostos e Fator R" }],
+    links: [
+      { href: "/impostos", rotulo: "Impostos e Fator R" },
+      { href: "/taxas", rotulo: "Taxas e tarifas" },
+    ],
   },
   {
     titulo: "Dados",

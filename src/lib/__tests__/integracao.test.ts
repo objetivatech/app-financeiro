@@ -19,6 +19,9 @@ import { atualizarCompromissos, contasAPagar, criarDivida, criarRecorrencia, flu
 import { hojeBrasil, somarDias } from "../datas";
 import { indicadoresFiscais, resumoRecebiveis } from "../fiscal/indicadores";
 import { salvarPerfilFiscal } from "../fiscal/perfil";
+import { impostosPorCompetencia } from "../fiscal/impostos-a-pagar";
+import { vencimentoDoImposto } from "../fiscal/apuracao";
+import { resumoTaxas } from "../taxas";
 import { deslocarMes as deslocarMesTeste } from "../formato";
 import { sincronizarAsaas } from "../integracoes/asaas/sincronizar";
 import { sincronizarMercadoPago } from "../integracoes/mercadopago/sincronizar";
@@ -288,7 +291,8 @@ describe.skipIf(!url)("importação + classificação no banco", () => {
       // Rodar de novo não duplica nada.
       const r2 = await sincronizarAsaas(db, { classificar: false });
       expect(r2.lancamentosNovos).toBe(0);
-      expect(await db.$count(schema.compromissos)).toBe(3);
+      // (fora o DAS estimado pelas notas, que agora também entra em A pagar)
+      expect(await db.$count(schema.compromissos, sql`origem <> 'imposto'`)).toBe(3);
 
       const rec = await resumoRecebiveis(db);
       expect(rec).toMatchObject({ aReceber30dCentavos: 80_000, vencidoCentavos: 30_000, vencidoQtd: 1 });
@@ -816,5 +820,37 @@ describe.skipIf(!url)("importação + classificação no banco", () => {
       delete process.env.MERCADOPAGO_BASE_URL;
       servidor.close();
     }
+  });
+  it("impostos por competência viram contas a pagar no dia 20; conta fixa manual tem prioridade; taxas do Asaas somadas", async () => {
+    const atual = hojeBrasil().slice(0, 7);
+    const anterior = deslocarMesTeste(atual, -1);
+    await salvarPerfilFiscal(db, { proLaboreMensalCentavos: 300_000, sujeitoFatorR: true, regimes: [] });
+    await db.insert(schema.notasFiscais).values([
+      { origem: "teste", idExterno: "nf-imp-1", status: "AUTHORIZED", valorCentavos: 800_000, dataEmissao: `${anterior}-05` },
+      { origem: "teste", idExterno: "nf-imp-2", status: "AUTHORIZED", valorCentavos: 200_000, dataEmissao: `${anterior}-18`, issRetido: true },
+      { origem: "teste", idExterno: "nf-imp-3", status: "CANCELED", valorCentavos: 999_999, dataEmissao: `${anterior}-20` },
+    ]);
+    await atualizarCompromissos(db);
+    const [c] = (await impostosPorCompetencia(db, 2)).filter((x) => x.competencia === anterior);
+    expect(c.quantidadeNotas).toBeGreaterThanOrEqual(2); // + a nota do teste do Asaas, se cair no mesmo mês
+    expect(c.vencimento).toBe(vencimentoDoImposto(anterior));
+    expect(c.inssCentavos).toBe(33_000);
+    expect(c.dasCentavos).toBeGreaterThan(0);
+    const das = await db.query.compromissos.findFirst({ where: (x, { and, eq }) => and(eq(x.origem, "imposto"), eq(x.idExterno, `das:${anterior}`)) });
+    expect(das).toMatchObject({ valorCentavos: c.dasCentavos, vencimento: c.vencimento, escopo: "PJ", categoriaId: "pj_impostos" });
+    const inss = await db.query.compromissos.findFirst({ where: (x, { and, eq }) => and(eq(x.origem, "imposto"), eq(x.idExterno, `inss:${anterior}`)) });
+    expect(inss?.valorCentavos).toBe(33_000);
+
+    // Com uma conta fixa "INSS" cadastrada à mão, a estimativa do INSS sai (não conta em dobro); a do DAS fica.
+    await criarRecorrencia(db, { descricao: "INSS pró-labore", tipo: "pagar", escopo: "PJ", valorCentavos: 33_000, diaVencimento: 20, inicio: `${anterior}-01` });
+    await atualizarCompromissos(db);
+    expect(await db.query.compromissos.findFirst({ where: (x, { and, eq }) => and(eq(x.origem, "imposto"), eq(x.idExterno, `inss:${anterior}`)) })).toBeUndefined();
+    expect(await db.query.compromissos.findFirst({ where: (x, { and, eq }) => and(eq(x.origem, "imposto"), eq(x.idExterno, `das:${anterior}`)) })).toBeTruthy();
+
+    // Taxas: o extrato do Asaas do teste de integração tem a taxa da cobrança (R$ 1,99).
+    const taxas = await resumoTaxas(db, 12);
+    expect(taxas.total12Centavos).toBeGreaterThanOrEqual(199);
+    expect(taxas.lancamentos.some((l) => l.valorCentavos === 199)).toBe(true);
+    expect(taxas.conferencia.brutoMenosLiquidoCentavos).toBeGreaterThanOrEqual(199);
   });
 });
