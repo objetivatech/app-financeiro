@@ -436,7 +436,9 @@ contabilidade; esta tela serve para planejar.
 - **Receita bruta mensal:** soma das notas fiscais **autorizadas** do Asaas. Nos meses sem nota, usa as cobranças
   recebidas.
 - **RBT12:** receita dos 12 meses **anteriores** ao mês atual (regra do Simples).
-- **Folha (12 meses):** pró-labore cadastrado em [Configurações](#configuracoes) × 12.
+- **Folha (12 meses):** pró-labore cadastrado em [Configurações](#configuracoes) × 12. Com menos de 12 meses de
+  pró-labore (ex.: logo depois de sair do MEI), vale a **média dos meses com folha × 12** e, no primeiro mês, a folha
+  do próprio mês × 12 — foi assim que o PGDAS-D apurou o DAS de set/2026 (Anexo III, com um só mês de pró-labore).
 - **Fator R** = folha ÷ RBT12. Com **28% ou mais**, atividades como marketing/publicidade e desenvolvimento de
   software são tributadas pelo **Anexo III** (a partir de 6%). Abaixo disso, pelo **Anexo V** (a partir de 15,5%).
 - **Alíquota efetiva** = (RBT12 × alíquota nominal − parcela a deduzir) ÷ RBT12, pelas tabelas da LC 123/2006.

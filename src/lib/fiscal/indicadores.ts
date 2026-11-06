@@ -3,7 +3,7 @@ import { hojeBrasil, primeiroDoMes, somarDias } from "../datas";
 import type { Db } from "../db";
 import { clientes, compromissos, notasFiscais } from "../db/schema";
 import { meiAte, obterPerfilFiscal, regimeNoMes, type PerfilFiscal } from "./perfil";
-import { diagnosticarFatorR, type DiagnosticoFatorR } from "./simples";
+import { diagnosticarFatorR, folhaDoFatorR, type DiagnosticoFatorR } from "./simples";
 
 export interface ReceitaMensal {
   mes: string;
@@ -87,10 +87,14 @@ export async function indicadoresFiscais(db: Db): Promise<IndicadoresFiscais> {
   const atual = serie[12];
   const rbt12 = anteriores.reduce((s, m) => s + m.valorCentavos, 0);
   const inicio = inicioDaFolha(perfil);
-  const mesesDeFolha = anteriores.filter((m) => !inicio || m.mes >= inicio).length;
+  const temFolha = (mes: string) => regimeNoMes(perfil, mes) === "simples" && (!inicio || mes >= inicio);
+  const mesesDeFolha = anteriores.filter((m) => temFolha(m.mes)).length;
   const diagnostico = diagnosticarFatorR({
     rbt12Centavos: rbt12,
-    folha12Centavos: perfil.proLaboreMensalCentavos * mesesDeFolha,
+    folha12Centavos: folhaDoFatorR(
+      anteriores.map((m) => (temFolha(m.mes) ? perfil.proLaboreMensalCentavos : 0)),
+      temFolha(atual.mes) ? perfil.proLaboreMensalCentavos : 0,
+    ),
     receitaDoMesCentavos: atual.valorCentavos,
     proLaboreMensalCentavos: perfil.proLaboreMensalCentavos,
   });
