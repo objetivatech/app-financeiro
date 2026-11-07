@@ -627,6 +627,39 @@ Traz automaticamente, só lendo (o app nunca cria cobranças nem move dinheiro):
   foram **ativadas** e se a aplicação foi criada **logado na mesma conta** que você quer acompanhar.
 - O Access Token dá acesso à conta: guarde-o só no `.env` da VPS. Se vazar, renove nas credenciais da aplicação.
 
+<a id="telegram"></a>
+
+## Telegram
+
+Um bot particular no Telegram para consultar e alimentar o app pelo celular. Ele só conversa com o **seu** chat.
+
+**O que ele faz**
+
+- **/resumo** — o mês até agora: resultado, o que ficou na empresa, o que sobrou para você, caixa, a receber e posição
+  líquida. **/saldo** — saldo de cada conta. **/pagar** — o que vence em 7 dias e o atrasado. **/impostos** — o próximo
+  DAS e INSS (dia 20). **/avisos** — os avisos do consultor. **/ajuda** — a lista.
+- **Mande um arquivo** (PDF, OFX, CSV ou foto de extrato/fatura): vai para a mesma fila do [Importar](#importar) e o
+  bot avisa quando terminou. Se o PDF tiver senha, ele pergunta; você responde com a senha, ele **apaga a mensagem**
+  da conversa e guarda a senha cifrada para os próximos.
+- **Escreva uma pergunta** ("quanto gastei com delivery este mês?"): o [consultor](#consultor) responde com os seus
+  dados, na mesma conversa (lembra o contexto; **/cancelar** começa outra).
+- **Avisos no celular:** todo dia a partir das 8h, o que vence hoje e amanhã (e se há contas atrasadas); e os avisos
+  **críticos** do consultor assim que aparecem.
+
+O bot só lê e importa: não paga, não transfere e não cria cobranças. As mensagens passam pelos servidores do
+Telegram — evite mandar por ali o que não mandaria por lá. CPF/CNPJ continuam mascarados nas respostas do consultor.
+
+**Como ligar**
+
+1. No Telegram, abra o **@BotFather**, envie `/newbot`, escolha um nome e um usuário (terminado em `bot`). Ele devolve
+   um **token**.
+2. Na VPS, no `.env`: `TELEGRAM_BOT_TOKEN=...` e recrie o app (`docker compose --profile tunel up -d --build`).
+3. No app, em [Configurações](#configuracoes) → **Telegram**, clique em **Gerar código de vínculo**.
+4. No Telegram, abra o seu bot e envie `/vincular 123456` (o código, válido por 15 minutos). Pronto: só esse chat é
+   atendido. Em Configurações dá para **enviar uma mensagem de teste** ou **desvincular**.
+
+O bot busca as mensagens no Telegram (não precisa abrir porta nem mexer no Cloudflare Access).
+
 <a id="configuracoes"></a>
 
 ## Configurações

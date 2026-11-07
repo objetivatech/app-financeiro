@@ -22,11 +22,12 @@ import { salvarPerfilFiscal } from "../fiscal/perfil";
 import { impostosPorCompetencia } from "../fiscal/impostos-a-pagar";
 import { vencimentoDoImposto } from "../fiscal/apuracao";
 import { resumoTaxas } from "../taxas";
+import { acompanharArquivos, bomDiaSeNecessario, gerarCodigoDeVinculo, lerEstado as estadoTelegram, rodada } from "../telegram/bot";
 import { deslocarMes as deslocarMesTeste } from "../formato";
 import { sincronizarAsaas } from "../integracoes/asaas/sincronizar";
 import { sincronizarMercadoPago } from "../integracoes/mercadopago/sincronizar";
 import { cancelarFila, enfileirar, estadoFila, informarSenha, retomarFila, situacaoDosTrabalhos } from "../importacao/fila";
-import { senhasGuardadas } from "../importacao/senha-pdf";
+import { apagarSenhasGuardadas, senhasGuardadas } from "../importacao/senha-pdf";
 import { gravarExtrato, importarParaBanco, registrarFinaisDaFatura } from "../importacao/persistir";
 import { somarMeses } from "../cartoes/calculo";
 import { marcarFaturaPaga, registrarFatura, resumoCartoes } from "../cartoes/servico";
@@ -853,5 +854,112 @@ describe.skipIf(!url)("importação + classificação no banco", () => {
     expect(taxas.total12Centavos).toBeGreaterThanOrEqual(199);
     expect(taxas.lancamentos.some((l) => l.valorCentavos === 199)).toBe(true);
     expect(taxas.conferencia.brutoMenosLiquidoCentavos).toBeGreaterThanOrEqual(199);
+  });
+  it("Telegram: vínculo por código, comandos, extrato pelo chat e PDF com senha (API falsa)", async () => {
+    const enviadas: { chat: number; texto: string }[] = [];
+    const apagadas: number[] = [];
+    const fila: object[] = [];
+    let proximoId = 1;
+    const arquivos: Record<string, Uint8Array> = { "f1": fixture("extrato-btg.ofx"), "f2": new Uint8Array([...fixture("extrato-com-senha.pdf"), ...new TextEncoder().encode("\n% copia do telegram\n")]) };
+    const servidor = createServer((req, res) => {
+      let corpo = "";
+      req.on("data", (c) => (corpo += c));
+      req.on("end", () => {
+        const ok = (result: unknown) => {
+          res.writeHead(200, { "content-type": "application/json" });
+          res.end(JSON.stringify({ ok: true, result }));
+        };
+        const url = req.url ?? "";
+        expect(url).toContain("/botTOKEN-TESTE");
+        const dados = corpo ? JSON.parse(corpo) : {};
+        if (url.endsWith("/getUpdates")) return ok(fila.splice(0));
+        if (url.endsWith("/sendMessage")) {
+          enviadas.push({ chat: dados.chat_id, texto: dados.text });
+          return ok({ message_id: 999 });
+        }
+        if (url.endsWith("/deleteMessage")) {
+          apagadas.push(dados.message_id);
+          return ok(true);
+        }
+        if (url.endsWith("/getFile")) return ok({ file_path: `docs/${dados.file_id}` });
+        const arq = url.match(/\/file\/botTOKEN-TESTE\/docs\/(\w+)/)?.[1];
+        if (arq) {
+          res.writeHead(200);
+          return res.end(Buffer.from(arquivos[arq]));
+        }
+        ok(true);
+      });
+    });
+    await new Promise<void>((r) => servidor.listen(0, "127.0.0.1", r));
+    process.env.TELEGRAM_BOT_TOKEN = "TOKEN-TESTE";
+    process.env.TELEGRAM_API_URL = `http://127.0.0.1:${(servidor.address() as { port: number }).port}`;
+    const msg = (chat: number, extra: object) => fila.push({ update_id: proximoId++, message: { message_id: proximoId, chat: { id: chat, type: "private" }, from: { id: chat, first_name: "Diogo" }, date: 1_800_000_000, ...extra } });
+    const ultima = () => enviadas.at(-1)?.texto ?? "";
+    const esperarFila = async () => {
+      for (let i = 0; i < 200 && estadoFila().ocupada; i++) await new Promise((r) => setTimeout(r, 50));
+    };
+    try {
+      // Sem vínculo, não responde dados.
+      msg(111, { text: "/saldo" });
+      await rodada(db, 0);
+      expect(ultima()).toMatch(/privado/);
+      // Código errado não vincula; o certo, sim.
+      const codigo = await gerarCodigoDeVinculo(db);
+      msg(111, { text: "/vincular 000000" === `/vincular ${codigo}` ? "/vincular 000001" : "/vincular 000000" });
+      msg(111, { text: `/vincular ${codigo}` });
+      await rodada(db, 0);
+      expect(ultima()).toMatch(/Vinculado/);
+      expect((await estadoTelegram(db)).chatId).toBe(111);
+      // Outro chat continua sem acesso, mesmo com o código antigo.
+      msg(222, { text: `/vincular ${codigo}` });
+      await rodada(db, 0);
+      expect(enviadas.at(-1)).toMatchObject({ chat: 222 });
+      expect(ultima()).toMatch(/privado/);
+
+      for (const [comando, esperado] of [["/saldo", /Saldos/], ["/pagar", /pagar|Nada a pagar/i], ["/impostos", /Impostos/], ["/resumo", /Resumo de/], ["/avisos", /aviso/i], ["/xyz", /Não conheço/]] as const) {
+        msg(111, { text: comando });
+        await rodada(db, 0);
+        expect(enviadas.at(-1)).toMatchObject({ chat: 111 });
+        expect(ultima()).toMatch(esperado);
+      }
+      // Pergunta livre sem a chave da IA: explica o que fazer.
+      msg(111, { text: "quanto gastei este mês?" });
+      await rodada(db, 0);
+      expect(ultima()).toMatch(/ANTHROPIC_API_KEY/);
+
+      // Extrato enviado pelo chat vai para a fila e o resultado volta no chat.
+      msg(111, { document: { file_id: "f1", file_name: "extrato-btg.ofx" } });
+      await rodada(db, 0);
+      expect(ultima()).toMatch(/Recebi/);
+      await esperarFila();
+      await acompanharArquivos(db);
+      expect(ultima()).toMatch(/extrato-btg\.ofx<\/b> (importado|: Este arquivo já foi importado)|❌/);
+
+      // PDF com senha (sem senha guardada): o bot pede a senha, apaga a mensagem com ela e devolve o arquivo à fila.
+      await apagarSenhasGuardadas(db);
+      msg(111, { document: { file_id: "f2", file_name: "fatura.pdf" } });
+      await rodada(db, 0);
+      await esperarFila();
+      await acompanharArquivos(db);
+      expect(ultima()).toMatch(/Responda com a senha/);
+      const pedindo = (await estadoTelegram(db)).aguardandoSenha;
+      expect(pedindo).toBeTruthy();
+      msg(111, { text: "s3nh@-teste" });
+      await rodada(db, 0);
+      expect(ultima()).toMatch(/Tentando abrir/);
+      expect(apagadas.length).toBe(1);
+      expect((await estadoTelegram(db)).aguardandoSenha).toBeNull();
+      await esperarFila();
+
+      // Bom dia: uma vez por dia, a partir das 8h.
+      const nove = new Date(`${hojeBrasil()}T12:00:00Z`); // 9h em Brasília
+      await bomDiaSeNecessario(db, nove);
+      expect((await estadoTelegram(db)).ultimoBomDia).toBe(hojeBrasil());
+      expect(await bomDiaSeNecessario(db, nove)).toBe(false);
+    } finally {
+      delete process.env.TELEGRAM_BOT_TOKEN;
+      delete process.env.TELEGRAM_API_URL;
+      servidor.close();
+    }
   });
 });

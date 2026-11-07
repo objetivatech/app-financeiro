@@ -39,7 +39,7 @@
 - [ ] Metas: troca de carro, reserva de caixa da PJ, reserva/investimentos PF
 
 ## Fase 4 — rotina
-- [ ] Bot no Telegram (lançar por texto/foto, /resumo, /saldo)
+- [x] Bot no Telegram: /resumo, /saldo, /pagar, /impostos, /avisos, extratos por arquivo/foto, perguntas ao consultor e avisos diários (v0.13.0)
 - [ ] E-mail semanal e mensal
 
 ## Ideias anteriores ainda válidas

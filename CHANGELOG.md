@@ -3,6 +3,14 @@
 Todas as mudanças relevantes do app, da mais recente para a mais antiga. O formato segue
 [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e as versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.13.0] — 2026-11-07
+
+### Adicionado
+- **Bot do Telegram** (`TELEGRAM_BOT_TOKEN`; vínculo do seu chat em Configurações → Telegram): /resumo, /saldo,
+  /pagar, /impostos e /avisos; envio de extratos e faturas (PDF, OFX, CSV, foto) direto para a fila de importação,
+  com aviso do resultado e pedido de senha para PDF protegido; perguntas livres ao consultor; bom dia com o que vence
+  hoje e amanhã; avisos críticos na hora. Só responde ao chat vinculado e não precisa expor o app na internet.
+
 ## [0.12.1] — 2026-11-06
 
 ### Corrigido

@@ -50,4 +50,10 @@ export async function register() {
   };
   setTimeout(revisar, 5 * 60_000).unref();
   setInterval(revisar, 60 * 60_000).unref();
+
+  // Bot do Telegram (TELEGRAM_BOT_TOKEN): consultas, envio de extratos e avisos no celular.
+  if (process.env.TELEGRAM_BOT_TOKEN) {
+    const { iniciarBot } = await import("./lib/telegram/bot");
+    iniciarBot(obterDb());
+  }
 }

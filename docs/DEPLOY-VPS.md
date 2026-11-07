@@ -25,6 +25,7 @@ Nenhum desses dados existe pronto em algum lugar: você cria cada um. O arquivo 
 |---|---|---|
 | `APP_DOMINIO` | Endereço público do app, sem `https://` (ex.: `financas.seudominio.com.br`). | O mesmo *Public hostname* do passo 3. Sem ele, atrás da Cloudflare os botões de salvar podem ser recusados. Depois de mudar, rode o `docker compose ... up -d --build` (o valor entra no build). |
 | `APP_SEGREDO` | Opcional. Chave para cifrar as senhas de PDF guardadas. | Sem ela, o app usa a `APP_SENHA`. Se trocar a que estiver em uso, as senhas guardadas deixam de abrir e o app volta a perguntar (é só digitar de novo). |
+| `TELEGRAM_BOT_TOKEN` | Opcional. Token do bot do Telegram (consultas, envio de extratos e avisos no celular). | No Telegram, @BotFather → `/newbot`. Depois vincule o seu chat em Configurações → Telegram. |
 | `POSTGRES_PASSWORD` | Senha do banco de dados. Só o app usa; você não vai digitá-la no dia a dia. | Invente, ou gere na VPS com `openssl rand -base64 24` e cole o resultado. |
 | `ANTHROPIC_API_KEY` | Chave para o app usar a IA (Claude). | Crie uma conta em [console.anthropic.com](https://console.anthropic.com), adicione créditos em *Billing* e gere a chave em *Settings → API Keys* (começa com `sk-ant-`). É uma cobrança separada da assinatura do Claude.ai. Defina um limite mensal de gasto em *Limits*. |
 | `APP_USUARIO` / `APP_SENHA` | Login e senha que o navegador vai pedir ao abrir o app. | Você escolhe. Use uma senha forte e diferente das outras. |
