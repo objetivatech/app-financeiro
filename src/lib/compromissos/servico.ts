@@ -415,28 +415,36 @@ export interface SemanaFluxo {
   PF: { entradas: number; saidas: number; saldo: number };
 }
 
-/** Último saldo conhecido de cada conta (fim do último extrato importado) e do Asaas (API), por escopo. */
-export async function saldosConhecidos(db: Db): Promise<{ PJ: number; PF: number; contasSemSaldo: number }> {
-  const listaContas = await db.query.contas.findMany({ where: and(eq(contas.ativa, true), ne(contas.tipo, "cartao_credito")) });
+/** Último saldo conhecido de cada conta ativa (fim do último extrato importado ou o saldo do Asaas pela API). */
+export async function saldosPorConta(db: Db): Promise<{ id: number; apelido: string; escopo: "PF" | "PJ" | "misto"; saldoCentavos: number | null; ate: string | null }[]> {
+  const listaContas = await db.query.contas.findMany({ where: and(eq(contas.ativa, true), ne(contas.tipo, "cartao_credito")), orderBy: [asc(contas.apelido)] });
   const ultimos = await db
-    .selectDistinctOn([importacoes.contaId], { contaId: importacoes.contaId, saldo: importacoes.saldoFinalCentavos })
+    .selectDistinctOn([importacoes.contaId], { contaId: importacoes.contaId, saldo: importacoes.saldoFinalCentavos, ate: importacoes.periodoFim })
     .from(importacoes)
     .where(isNotNull(importacoes.saldoFinalCentavos))
     .orderBy(importacoes.contaId, desc(importacoes.periodoFim), desc(importacoes.id));
-  const saldoPorConta = new Map(ultimos.map((u) => [u.contaId, Number(u.saldo)]));
+  const saldoPorConta = new Map(ultimos.map((u) => [u.contaId, { saldo: Number(u.saldo), ate: u.ate }]));
   const asaas = await db.query.integracoes.findFirst({ where: eq(integracoes.id, "asaas") });
   const saldoAsaas = (asaas?.dados as { saldoCentavos?: number | null } | undefined)?.saldoCentavos;
-  if (asaas?.contaId && typeof saldoAsaas === "number") saldoPorConta.set(asaas.contaId, saldoAsaas);
+  if (asaas?.contaId && typeof saldoAsaas === "number") {
+    saldoPorConta.set(asaas.contaId, { saldo: saldoAsaas, ate: asaas.ultimaSincronizacao ? asaas.ultimaSincronizacao.toISOString().slice(0, 10) : null });
+  }
+  return listaContas.map((c) => {
+    const s = saldoPorConta.get(c.id);
+    return { id: c.id, apelido: c.apelido, escopo: c.escopoPadrao, saldoCentavos: s ? s.saldo : null, ate: s?.ate ?? null };
+  });
+}
 
+/** Último saldo conhecido de cada conta (fim do último extrato importado) e do Asaas (API), por escopo. */
+export async function saldosConhecidos(db: Db): Promise<{ PJ: number; PF: number; contasSemSaldo: number }> {
   const total = { PJ: 0, PF: 0, contasSemSaldo: 0 };
-  for (const c of listaContas) {
-    const saldo = saldoPorConta.get(c.id);
-    if (saldo === undefined) {
+  for (const c of await saldosPorConta(db)) {
+    if (c.saldoCentavos === null) {
       total.contasSemSaldo++;
       continue;
     }
     // Conta mista conta como pessoal (o dinheiro está no seu nome).
-    total[c.escopoPadrao === "PJ" ? "PJ" : "PF"] += saldo;
+    total[c.escopo === "PJ" ? "PJ" : "PF"] += c.saldoCentavos;
   }
   return total;
 }

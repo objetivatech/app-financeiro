@@ -146,6 +146,17 @@ visões, categorias, dívidas, recorrentes, maiores saídas) e recebe diagnósti
   `carta:<data>` que abre na janela e expira em 7 dias.
 - `src/lib/markdown.ts`: renderiza o texto da IA sem HTML cru, só links http(s)/mailto/do app, sem imagens.
 
+## Telegram (`src/lib/telegram`)
+
+- `api.ts`: cliente da Bot API (`TELEGRAM_BOT_TOKEN`; `TELEGRAM_API_URL` só para testes). Long polling
+  (`getUpdates`): nada fica exposto na internet.
+- `bot.ts`: estado em `configuracoes` (chave `telegram`: chat vinculado, offset, conversa do consultor, arquivos na
+  fila, senha pedida, avisos já enviados). Só o chat vinculado por código (Configurações) é atendido. Comandos reusam
+  os serviços (`dadosConsolidado`, `saldosPorConta`, `contasAPagar`, `impostosPorCompetencia`, `listarAlertasAtivos`);
+  arquivos vão para `enfileirar` e o resultado volta por `acompanharArquivos`; texto livre vai para
+  `perguntarAoConsultor`. Rotinas a cada minuto: arquivos, bom dia (8h) e avisos críticos.
+- `textos.ts`: mensagens em HTML do Telegram (puras, testadas).
+
 ## Privacidade
 
 | Vai para a API do Claude | Não vai |

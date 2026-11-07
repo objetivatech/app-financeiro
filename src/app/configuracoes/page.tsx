@@ -1,18 +1,20 @@
 import { BotaoEnviar, Formulario } from "@/components/formulario";
 import { senhasGuardadas } from "@/lib/importacao/senha-pdf";
+import { telegramConfigurado } from "@/lib/telegram/api";
+import { lerEstado as estadoTelegram } from "@/lib/telegram/bot";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { Cartao, Carregando, estiloCampo, SeloEscopo } from "@/components/ui";
 import { CATEGORIAS_PADRAO } from "@/lib/classificacao/categorias";
 import { obterPerfil } from "@/lib/classificacao/executar";
 import { obterDb } from "@/lib/db";
-import { formatarMoeda, ROTULOS_NATUREZA } from "@/lib/formato";
+import { formatarData, formatarMoeda, ROTULOS_NATUREZA } from "@/lib/formato";
 import { iaDisponivel, modeloDa } from "@/lib/ia/cliente";
 import { custosDoMes } from "@/lib/ia/custos";
 import { LinkAjuda } from "@/components/link-ajuda";
 import { meiAte, obterPerfilFiscal } from "@/lib/fiscal/perfil";
 import { BotaoRetiradas } from "./botao-retiradas";
-import { excluirRegra, salvarDadosFiscais, salvarPerfil, apagarSenhasPdf } from "./acoes";
+import { excluirRegra, salvarDadosFiscais, salvarPerfil, apagarSenhasPdf, desvincularTelegram, gerarCodigoTelegram, testarTelegram } from "./acoes";
 
 const EXEMPLO_PERFIL = `Ex.: Sou sócio único de uma agência de marketing digital (Simples Nacional, Anexo III).
 Faturamento médio de R$ 40 mil/mês. Tiro pró-labore de R$ 3.000 todo dia 5 e distribuo lucros quando sobra.
@@ -33,11 +35,12 @@ export default function PaginaConfiguracoes() {
 async function Conteudo() {
   await connection();
   const db = obterDb();
-  const [perfil, listaRegras, fiscal, senhasPdf] = await Promise.all([
+  const [perfil, listaRegras, fiscal, senhasPdf, telegram] = await Promise.all([
     obterPerfil(db),
     db.query.regras.findMany({ orderBy: (r, { desc }) => [desc(r.id)] }),
     obterPerfilFiscal(db),
     senhasGuardadas(db),
+    estadoTelegram(db),
   ]);
   const custos = await custosDoMes(db);
   const custoTotal = custos.reduce((t, c) => t + c.custoUsd, 0);
@@ -165,6 +168,44 @@ async function Conteudo() {
           descrição/data/valor das transações (para classificar) e totais agregados (para as dicas). CPF/CNPJ não são
           enviados na classificação nem nas dicas.
         </p>
+      </Cartao>
+
+      <Cartao titulo={<>Telegram <LinkAjuda secao="telegram" /></>}>
+        <div id="telegram" className="space-y-3 text-sm">
+          {!telegramConfigurado() ? (
+            <p className="text-suave">
+              Bot desligado. Crie um bot no <strong>@BotFather</strong> do Telegram, coloque o token em <code>TELEGRAM_BOT_TOKEN</code> no
+              <code>.env</code> da VPS e recrie o app. O passo a passo está na Ajuda.
+            </p>
+          ) : telegram.chatId ? (
+            <>
+              <p>
+                ✅ Vinculado ao chat de <strong>{telegram.nome ?? "você"}</strong>
+                {telegram.vinculadoEm ? ` desde ${formatarData(telegram.vinculadoEm.slice(0, 10))}` : ""}. O bot só responde a esse chat.
+              </p>
+              <div className="flex flex-wrap items-center gap-4">
+                <Formulario acao={testarTelegram} retornoEmLinha className="flex flex-wrap items-center gap-2">
+                  <BotaoEnviar pendente="Enviando…">Enviar mensagem de teste</BotaoEnviar>
+                </Formulario>
+                <Formulario acao={desvincularTelegram} retornoEmLinha className="flex flex-wrap items-center gap-2">
+                  <BotaoEnviar variante="link" pendente="desvinculando…" className="text-negativo">
+                    desvincular
+                  </BotaoEnviar>
+                </Formulario>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-suave">
+                Bot ligado. Para ele falar só com você: gere o código abaixo e envie ao seu bot no Telegram{" "}
+                <code>/vincular 123456</code>.
+              </p>
+              <Formulario acao={gerarCodigoTelegram} retornoEmLinha className="flex flex-wrap items-center gap-2">
+                <BotaoEnviar pendente="Gerando…">Gerar código de vínculo</BotaoEnviar>
+              </Formulario>
+            </>
+          )}
+        </div>
       </Cartao>
 
       <Cartao titulo={<>Senhas de PDF <LinkAjuda secao="pdf-senha" /></>}>

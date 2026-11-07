@@ -9,6 +9,7 @@ import { obterDb } from "@/lib/db";
 import { configuracoes, regras } from "@/lib/db/schema";
 import { obterPerfilFiscal, salvarPerfilFiscal } from "@/lib/fiscal/perfil";
 import { apagarSenhasGuardadas } from "@/lib/importacao/senha-pdf";
+import { desvincular, enviarParaVinculado, gerarCodigoDeVinculo } from "@/lib/telegram/bot";
 import { parseValorCentavos } from "@/lib/importacao/util";
 
 export async function salvarPerfil(formData: FormData): Promise<RetornoAcao> {
@@ -85,4 +86,25 @@ export async function apagarSenhasPdf(): Promise<RetornoAcao> {
   await apagarSenhasGuardadas(obterDb());
   revalidatePath("/configuracoes");
   return { ok: "Senhas apagadas." };
+}
+
+export async function gerarCodigoTelegram(): Promise<RetornoAcao> {
+  const codigo = await gerarCodigoDeVinculo(obterDb());
+  revalidatePath("/configuracoes");
+  return { ok: `Envie ao bot: /vincular ${codigo} (vale 15 minutos)` };
+}
+
+export async function testarTelegram(): Promise<RetornoAcao> {
+  try {
+    const ok = await enviarParaVinculado(obterDb(), "👋 Teste do Financeiro PF + PJ: tudo certo por aqui. /ajuda");
+    return ok ? { ok: "Mensagem enviada." } : { erro: "Nenhum chat vinculado ainda." };
+  } catch (erro) {
+    return { erro: erro instanceof Error ? erro.message : "Falha ao enviar." };
+  }
+}
+
+export async function desvincularTelegram(): Promise<RetornoAcao> {
+  await desvincular(obterDb());
+  revalidatePath("/configuracoes");
+  return { ok: "Chat desvinculado." };
 }
